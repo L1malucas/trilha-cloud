@@ -31,7 +31,7 @@ O **Amazon ECS (Elastic Container Service)** é o serviço da AWS para orquestra
 A decisão mais importante ao configurar o ECS é o **launch type**: EC2 ou Fargate. No **launch type EC2**, você provisiona e gerencia as instâncias EC2 que vão hospedar os containers — mais controle sobre o hardware subjacente, mas também mais responsabilidade operacional, incluindo aplicar patch de sistema operacional nessas instâncias. No **AWS Fargate**, você não gerencia servidor nenhum — declara quanta CPU e memória cada container precisa, e a AWS provisiona e gerencia a infraestrutura por trás automaticamente, cobrando pelo que os containers efetivamente consomem. É, na prática, a diferença entre IaaS e algo próximo de serverless aplicado a containers — Fargate remove a camada de gestão de servidor que o EC2 launch type ainda exige.
 
 ![Console do ECS na etapa de criação de um cluster, mostrando a escolha entre os launch types "AWS Fargate" e "Amazon EC2 instances"](screenshots/10-aws-container-services-networking/01-ecs-criar-cluster-launch-type.png)
-> `[PRINT]` Passo a passo para capturar: no Console, buscar "ECS" (ou "Elastic Container Service") e abrir o serviço. Clicar em "Create cluster" (ou "Clusters" → "Create Cluster"). Capturar a tela do assistente mostrando as opções de infraestrutura, com "AWS Fargate (serverless)" e "Amazon EC2 instances" como escolhas. Não é necessário concluir a criação do cluster.
+> `[PRINT]` Passo a passo para capturar: abrir o ECS direto em https://console.aws.amazon.com/ecs/v2/home?region=sa-east-1 (ou buscar "ECS" na barra de busca do Console). Clicar em "Create cluster" (ou "Clusters" → "Create Cluster"). Capturar a tela do assistente mostrando as opções de infraestrutura, com "AWS Fargate (serverless)" e "Amazon EC2 instances" como escolhas. Não é necessário concluir a criação do cluster.
 
 > `[TEORIA]` Para a prova: EC2 launch type = você gerencia as instâncias por trás; Fargate = a AWS gerencia toda a infraestrutura, você só declara CPU/memória do container e paga pelo consumo. Um cenário que menciona "sem gerenciar servidor" ou "serverless para containers" aponta para Fargate.
 
@@ -40,7 +40,7 @@ A decisão mais importante ao configurar o ECS é o **launch type**: EC2 ou Farg
 Antes de um container poder rodar, sua imagem precisa estar armazenada em algum lugar acessível. O **Amazon ECR (Elastic Container Registry)** é o registro de imagens de container da AWS — equivalente, dentro do ecossistema AWS, ao Docker Hub público, mas privado por padrão e integrado nativamente com IAM (controle de quem pode enviar ou baixar imagens) e com o ECS (que busca imagens diretamente do ECR ao iniciar uma task).
 
 ![Console do ECR mostrando a lista de repositórios de imagens de container da conta, ou a tela de criação de um novo repositório](screenshots/10-aws-container-services-networking/02-ecr-repositorios.png)
-> `[PRINT]` Passo a passo para capturar: no Console, buscar "ECR" e abrir o serviço. Capturar a tela de "Repositories", mostrando a lista (provavelmente vazia numa conta nova) e o botão "Create repository".
+> `[PRINT]` Passo a passo para capturar: abrir o ECR direto em https://console.aws.amazon.com/ecr/repositories?region=sa-east-1 (ou buscar "ECR" na barra de busca do Console). Capturar a tela de "Repositories", mostrando a lista (provavelmente vazia numa conta nova) e o botão "Create repository".
 
 ## EKS: quando a orquestração precisa ser Kubernetes
 

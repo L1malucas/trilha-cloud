@@ -25,12 +25,12 @@ Boa parte do vocabulário deste módulo já apareceu em módulos anteriores, cad
 Nenhum mecanismo de failover funciona sem primeiro detectar que houve falha. Um **health check** é uma verificação periódica e automática de que um recurso está respondendo corretamente — o Load Balancer do módulo 6, por exemplo, faz health checks contínuos em cada instância do seu target group, e para de enviar tráfego para qualquer uma que pare de responder dentro do esperado, sem esperar intervenção humana.
 
 ![Console do EC2, na configuração de um Target Group, mostrando a aba "Health checks" com o caminho de verificação (health check path) e os limites de sucesso/falha configuráveis](screenshots/11-projetando-para-uptime-network/01-target-group-health-check.png)
-> `[PRINT]` Passo a passo para capturar: no Console, dentro de "EC2" → "Target Groups" (no menu lateral, em "Load Balancing"), abrir um target group existente (ou iniciar a criação de um novo, sem concluir) e clicar na aba/seção "Health checks". Capturar a tela mostrando os campos de "Health check path", "Healthy threshold", "Unhealthy threshold" e "Timeout".
+> `[PRINT]` Passo a passo para capturar: abrir o EC2 direto em https://console.aws.amazon.com/ec2/home?region=sa-east-1, dentro de "Target Groups" (no menu lateral, em "Load Balancing"), abrir um target group existente (ou iniciar a criação de um novo, sem concluir) e clicar na aba/seção "Health checks". Capturar a tela mostrando os campos de "Health check path", "Healthy threshold", "Unhealthy threshold" e "Timeout".
 
 O Route 53 também pode fazer health checks, mas num nível diferente: em vez de checar instâncias individuais atrás de um Load Balancer, ele pode checar endpoints inteiros — por exemplo, se um site inteiro numa região está respondendo — e usar o resultado para decidir para onde apontar o DNS.
 
 ![Console do Route 53 na tela de criação de um Health Check, mostrando o campo de endpoint a ser monitorado e o intervalo de verificação](screenshots/11-projetando-para-uptime-network/02-route53-health-check.png)
-> `[PRINT]` Passo a passo para capturar: no Console, dentro de "Route 53", clicar em "Health checks" no menu lateral e depois em "Create health check". Capturar a tela do assistente, mostrando os campos de configuração do endpoint a ser monitorado (domínio ou IP) e o intervalo entre verificações. Não é necessário concluir a criação.
+> `[PRINT]` Passo a passo para capturar: abrir o Route 53 direto em https://console.aws.amazon.com/route53/v2/home (ou buscar "Route 53" na barra de busca do Console), clicar em "Health checks" no menu lateral e depois em "Create health check". Capturar a tela do assistente, mostrando os campos de configuração do endpoint a ser monitorado (domínio ou IP) e o intervalo entre verificações. Não é necessário concluir a criação.
 
 ## Failover de DNS: redirecionando automaticamente
 

@@ -27,7 +27,7 @@ Até agora, esta trilha usou o Console para tudo — e por bom motivo: o Console
 Antes de instalar qualquer coisa localmente, vale conhecer o **AWS CloudShell**: um terminal de linha de comando que roda inteiramente dentro do navegador, acessível direto do Console, já com o AWS CLI pré-instalado e pré-autenticado com as mesmas permissões do usuário que está logado. Não existe passo de configuração de credenciais — o CloudShell já sabe quem você é, porque você acabou de entrar nele a partir de uma sessão logada no Console.
 
 ![AWS CloudShell aberto dentro do Console, com o terminal visível na parte inferior da tela e o prompt de comando pronto para uso](screenshots/07-aws-cli-e-cloudshell/01-cloudshell-terminal-aberto.png)
-> `[PRINT]` Passo a passo para capturar: logado no Console, clicar no ícone de terminal no topo da barra de navegação (geralmente ao lado do sino de notificações) ou buscar "CloudShell" na barra de busca. Aguardar o ambiente inicializar (pode levar alguns segundos na primeira vez). Capturar a tela com o terminal aberto e o prompt de comando visível, pronto para receber um comando.
+> `[PRINT]` Passo a passo para capturar: logado no Console, clicar no ícone de terminal no topo da barra de navegação (geralmente ao lado do sino de notificações), abrir direto em https://console.aws.amazon.com/cloudshell/home?region=sa-east-1, ou buscar "CloudShell" na barra de busca. Aguardar o ambiente inicializar (pode levar alguns segundos na primeira vez). Capturar a tela com o terminal aberto e o prompt de comando visível, pronto para receber um comando.
 
 Vale rodar o primeiro comando ali mesmo, para confirmar que a identidade autenticada é exatamente a que você espera:
 

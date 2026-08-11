@@ -27,7 +27,7 @@ sidebar_position: 12
 O **Amazon S3 (Simple Storage Service)** organiza dados em **buckets** — contêineres de nível superior, com nome único globalmente (nenhuma outra conta AWS no mundo pode ter um bucket com o mesmo nome que o seu, dentro da mesma partição da AWS) — dentro dos quais você guarda objetos identificados por uma chave (key), que costuma se parecer com um caminho de arquivo (`fotos/2026/imagem.jpg`), embora o S3 não tenha pastas de verdade por trás — é uma ilusão organizada pela própria chave.
 
 ![Console do S3 na tela de criação de um bucket, mostrando o campo de nome (com aviso de unicidade global) e a região selecionada](screenshots/12-opcoes-de-armazenamento/01-s3-criar-bucket.png)
-> `[PRINT]` Passo a passo para capturar: no Console, buscar "S3" e abrir o serviço. Clicar em "Create bucket". Preencher um nome único (por exemplo, `trilha-cloud-aws-lab12-` seguido de números aleatórios) com a região São Paulo selecionada. Capturar a tela mostrando o campo de nome preenchido e a seção de configuração de acesso público (que deve permanecer bloqueada por padrão — "Block all public access" marcado). Concluir a criação do bucket.
+> `[PRINT]` Passo a passo para capturar: abrir o S3 direto em https://console.aws.amazon.com/s3/home?region=sa-east-1 (ou buscar "S3" na barra de busca do Console). Clicar em "Create bucket". Preencher um nome único (por exemplo, `trilha-cloud-aws-lab12-` seguido de números aleatórios) com a região São Paulo selecionada. Capturar a tela mostrando o campo de nome preenchido e a seção de configuração de acesso público (que deve permanecer bloqueada por padrão — "Block all public access" marcado). Concluir a criação do bucket.
 
 Depois de criado o bucket, envie um arquivo pequeno qualquer (uma imagem ou um `.txt` simples) para dentro dele.
 
@@ -69,7 +69,7 @@ O **AWS Storage Gateway** conecta ambientes on-premises ao armazenamento da AWS,
 O **AWS Backup** centraliza e automatiza a política de backup de múltiplos serviços da AWS (EBS, RDS, DynamoDB, EFS, entre outros) num único lugar, em vez de configurar backup separadamente serviço por serviço — conectando diretamente com a estratégia de "backup and restore" vista no módulo 11 como a mais básica das quatro abordagens de disaster recovery.
 
 ![Console do AWS Backup mostrando a tela de criação de um backup plan, com a frequência de backup e os serviços de origem selecionáveis](screenshots/12-opcoes-de-armazenamento/05-aws-backup-plan.png)
-> `[PRINT]` Passo a passo para capturar: no Console, buscar "Backup" e abrir "AWS Backup". Clicar em "Create Backup plan". Capturar a tela do assistente mostrando as opções de frequência de backup e período de retenção. Não é necessário concluir a criação de um plano real.
+> `[PRINT]` Passo a passo para capturar: abrir o AWS Backup direto em https://console.aws.amazon.com/backup/home?region=sa-east-1 (ou buscar "Backup" na barra de busca do Console). Clicar em "Create Backup plan". Capturar a tela do assistente mostrando as opções de frequência de backup e período de retenção. Não é necessário concluir a criação de um plano real.
 
 ## Práticas
 

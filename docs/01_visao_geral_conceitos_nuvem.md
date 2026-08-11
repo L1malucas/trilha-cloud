@@ -30,7 +30,7 @@ A computação em nuvem resolve exatamente esse problema: ela transforma capacid
 
 ## Vendo o pagamento por uso na prática: o painel de billing
 
-A melhor forma de entender "pagamento por uso" não é ler a definição — é abrir o painel que mede esse uso em tempo real. É para isso que existe o **AWS Billing and Cost Management**, o painel central onde a AWS mostra, com granularidade de serviço e de dia, exatamente quanto sua conta está consumindo.
+A melhor forma de entender "pagamento por uso" não é ler a definição — é abrir o painel que mede esse uso em tempo real. É para isso que existe o **AWS Billing and Cost Management** (link direto: https://console.aws.amazon.com/billing/home), o painel central onde a AWS mostra, com granularidade de serviço e de dia, exatamente quanto sua conta está consumindo.
 
 ![Painel do AWS Billing and Cost Management mostrando o resumo de custos do mês e a previsão de fatura](screenshots/01-visao-geral-conceitos-nuvem/01-billing-dashboard.png)
 > `[PRINT]` Passo a passo para capturar: logado no AWS Management Console com o usuário IAM administrativo, clicar no nome da conta no canto superior direito e selecionar "Billing and Cost Management" (ou buscar "Billing" na barra de busca do Console). Capturar a tela inicial do painel, mostrando o card de "Custo total do mês até agora" (ou equivalente em português) e o gráfico de tendência de gastos — mesmo que os valores estejam zerados por não haver recursos criados ainda.
@@ -68,7 +68,7 @@ A AWS costuma organizar sua proposta de valor em um punhado de benefícios que, 
 
 ## Confirmando que você não vai gastar mais do que deveria: o Free Tier
 
-Antes de qualquer laboratório desta trilha te pedir para criar um recurso de verdade, vale conhecer a ferramenta que garante que a prática vai custar zero (ou perto disso): o **AWS Free Tier dashboard**, dentro do próprio Billing and Cost Management, mostra exatamente quanto do limite gratuito mensal cada serviço já consumiu.
+Antes de qualquer laboratório desta trilha te pedir para criar um recurso de verdade, vale conhecer a ferramenta que garante que a prática vai custar zero (ou perto disso): o **AWS Free Tier dashboard** (link direto: https://console.aws.amazon.com/billing/home#/freetier), dentro do próprio Billing and Cost Management, mostra exatamente quanto do limite gratuito mensal cada serviço já consumiu.
 
 ![Painel do AWS Free Tier mostrando a lista de serviços cobertos e o percentual de uso do limite gratuito mensal](screenshots/01-visao-geral-conceitos-nuvem/03-free-tier-dashboard.png)
 > `[PRINT]` Passo a passo para capturar: dentro de "Billing and Cost Management", no menu lateral esquerdo clicar em "AWS Free Tier" (ou buscar "Free Tier" na barra de busca do Console). Capturar a tela mostrando a tabela de serviços com colunas de limite gratuito, uso atual e previsão de uso — mesmo que todos os valores estejam em 0% de uso.
@@ -106,7 +106,7 @@ Essa hierarquia de "quem cuida de quê" é a mesma lógica por trás do **Shared
 Toda decisão de arquitetura em nuvem envolve trade-offs. Para dar um vocabulário comum a essas decisões, a AWS organiza boas práticas em seis pilares, coletivamente chamados de **AWS Well-Architected Framework**. O módulo 5 é inteiramente dedicado a desenvolvê-lo em profundidade, mas dá para ver a lista real agora mesmo, direto na ferramenta que a AWS disponibiliza para avaliar arquiteturas contra esses seis pilares.
 
 ![AWS Well-Architected Tool mostrando a tela de criação de uma revisão de workload, com os seis pilares listados](screenshots/01-visao-geral-conceitos-nuvem/04-well-architected-tool-pilares.png)
-> `[PRINT]` Passo a passo para capturar: no Console, buscar "Well-Architected Tool" na barra de busca e abrir o serviço. Clicar em "Define workload" (ou equivalente) para iniciar a criação de uma revisão — sem precisar concluir o cadastro. Capturar a tela em que os seis pilares aparecem listados (Excelência Operacional, Segurança, Confiabilidade, Eficiência de Performance, Otimização de Custos, Sustentabilidade), geralmente visível ao avançar para a etapa de seleção de pilares ou no painel de navegação lateral.
+> `[PRINT]` Passo a passo para capturar: abrir o Well-Architected Tool direto em https://console.aws.amazon.com/wellarchitected/home?region=sa-east-1 (ou buscar "Well-Architected Tool" na barra de busca do Console). Clicar em "Define workload" (ou equivalente) para iniciar a criação de uma revisão — sem precisar concluir o cadastro. Capturar a tela em que os seis pilares aparecem listados (Excelência Operacional, Segurança, Confiabilidade, Eficiência de Performance, Otimização de Custos, Sustentabilidade), geralmente visível ao avançar para a etapa de seleção de pilares ou no painel de navegação lateral.
 
 > `[TEORIA]` Para a prova: os seis pilares são excelência operacional, segurança, confiabilidade, eficiência de performance, otimização de custos e sustentabilidade. Vale decorar os seis nomes agora — o módulo 5 explica o que cada um significa na prática.
 

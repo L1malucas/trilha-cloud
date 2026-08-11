@@ -27,7 +27,7 @@ O nome é enganoso de propósito, então vale desfazer o mal-entendido logo de i
 Vamos criar uma função Lambda simples, testá-la, e observar exatamente como a AWS mede sua execução — a base de como ela é cobrada.
 
 ![Console do Lambda na tela de criação de função, com a opção "Author from scratch" selecionada, o runtime Python escolhido e o nome da função preenchido](screenshots/14-computacao-baseada-em-funcoes-lambda/01-lambda-criar-funcao.png)
-> `[PRINT]` Passo a passo para capturar: no Console, com a região São Paulo selecionada, buscar "Lambda" e abrir o serviço. Clicar em "Create function", manter "Author from scratch" selecionado, preencher o nome (por exemplo, `trilha-cloud-lab14`), selecionar o runtime "Python 3.13" (ou a versão mais recente disponível) e manter a arquitetura padrão. Capturar a tela preenchida antes de clicar em "Create function". Concluir a criação.
+> `[PRINT]` Passo a passo para capturar: com a região São Paulo selecionada, abrir o Lambda direto em https://console.aws.amazon.com/lambda/home?region=sa-east-1 (ou buscar "Lambda" na barra de busca do Console). Clicar em "Create function", manter "Author from scratch" selecionado, preencher o nome (por exemplo, `trilha-cloud-lab14`), selecionar o runtime "Python 3.13" (ou a versão mais recente disponível) e manter a arquitetura padrão. Capturar a tela preenchida antes de clicar em "Create function". Concluir a criação.
 
 Com a função criada, substitua o código de exemplo pelo seguinte, no editor embutido do Console:
 
@@ -77,7 +77,7 @@ Acesse essa URL no navegador (adicionando `?nome=SeuNome` ao final, já que o c�
 Toda execução de uma função Lambda gera logs automaticamente, sem nenhuma configuração extra — e esses logs vão parar exatamente no serviço que o módulo 6 já apresentou.
 
 ![CloudWatch Logs mostrando o log group da função Lambda, com um log stream contendo as linhas de execução, incluindo o START, END e REPORT de uma invocação](screenshots/14-computacao-baseada-em-funcoes-lambda/05-cloudwatch-logs-lambda.png)
-> `[PRINT]` Passo a passo para capturar: no Console, buscar "CloudWatch" e abrir "Log groups" no menu lateral. Localizar o grupo com nome `/aws/lambda/trilha-cloud-lab14` (ou o nome dado à função). Abrir o log stream mais recente e capturar a tela mostrando as linhas `START`, `END` e `REPORT` de uma execução, com os mesmos números de Duration e Billed Duration vistos no teste do Console.
+> `[PRINT]` Passo a passo para capturar: abrir o CloudWatch direto em https://console.aws.amazon.com/cloudwatch/home?region=sa-east-1#logsV2:log-groups (ou buscar "CloudWatch" na barra de busca do Console e ir em "Log groups" no menu lateral). Localizar o grupo com nome `/aws/lambda/trilha-cloud-lab14` (ou o nome dado à função). Abrir o log stream mais recente e capturar a tela mostrando as linhas `START`, `END` e `REPORT` de uma execução, com os mesmos números de Duration e Billed Duration vistos no teste do Console.
 
 Esse é o mesmo CloudWatch do módulo 6, agora recebendo logs de aplicação em vez de métricas de infraestrutura — reforçando que CloudWatch é a plataforma de observabilidade central da AWS, não um serviço isolado por contexto.
 

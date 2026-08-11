@@ -33,7 +33,7 @@ Um banco de dados **relacional** organiza dados em tabelas com colunas fixas e p
 O **Amazon RDS (Relational Database Service)** gerencia bancos relacionais das engines mais usadas do mercado — PostgreSQL, MySQL, MariaDB, Oracle e SQL Server — cuidando de provisionamento, patch de segurança, backup automático e failover, sem que você precise administrar o sistema operacional por trás.
 
 ![Console do RDS na etapa de criação de um banco de dados, mostrando a seleção de engine (PostgreSQL, MySQL, entre outras) e o campo de classe de instância elegível ao Free Tier](screenshots/13-opcoes-de-banco-de-dados/01-rds-criar-banco-engine.png)
-> `[PRINT]` Passo a passo para capturar: no Console, com a região São Paulo selecionada, buscar "RDS" e abrir o serviço. Clicar em "Create database". Selecionar o método "Standard create" e escolher uma engine (por exemplo, PostgreSQL). Capturar a tela mostrando os cartões de seleção de engine e, mais abaixo, o template "Free tier" selecionado.
+> `[PRINT]` Passo a passo para capturar: com a região São Paulo selecionada, abrir o RDS direto em https://console.aws.amazon.com/rds/home?region=sa-east-1 (ou buscar "RDS" na barra de busca do Console). Clicar em "Create database". Selecionar o método "Standard create" e escolher uma engine (por exemplo, PostgreSQL). Capturar a tela mostrando os cartões de seleção de engine e, mais abaixo, o template "Free tier" selecionado.
 
 Duas capacidades do RDS merecem destaque especial porque conectam diretamente com módulos anteriores. **Multi-AZ** replica o banco de forma síncrona para uma AZ diferente da mesma região — se a instância primária falhar, o RDS promove automaticamente a réplica para primária, com interrupção mínima. É a aplicação direta, num banco de dados, da mesma lógica de redundância multi-AZ vista pela primeira vez no módulo 2. **Read replicas**, por outro lado, replicam de forma assíncrona e servem para escalar **leitura**, não disponibilidade — você pode ter múltiplas read replicas recebendo consultas de leitura, aliviando a carga da instância primária, que continua sendo a única a receber escritas.
 
@@ -55,7 +55,7 @@ O **Amazon DynamoDB** é o serviço de banco de dados NoSQL totalmente gerenciad
 Vamos criar uma tabela real — DynamoDB no modo on-demand tem uma camada sempre gratuita generosa, tornando este um laboratório seguro de ponta a ponta.
 
 ![Console do DynamoDB na tela de criação de tabela, com os campos de nome da tabela e chave de partição (partition key) preenchidos](screenshots/13-opcoes-de-banco-de-dados/03-dynamodb-criar-tabela.png)
-> `[PRINT]` Passo a passo para capturar: no Console, buscar "DynamoDB" e abrir o serviço. Clicar em "Create table". Preencher o nome da tabela (por exemplo, `trilha-cloud-lab13`) e a chave de partição (por exemplo, `id`, tipo String). Manter as configurações padrão (modo de capacidade "On-demand"). Capturar a tela preenchida antes de concluir a criação. Concluir a criação da tabela.
+> `[PRINT]` Passo a passo para capturar: abrir o DynamoDB direto em https://console.aws.amazon.com/dynamodbv2/home?region=sa-east-1 (ou buscar "DynamoDB" na barra de busca do Console). Clicar em "Create table". Preencher o nome da tabela (por exemplo, `trilha-cloud-lab13`) e a chave de partição (por exemplo, `id`, tipo String). Manter as configurações padrão (modo de capacidade "On-demand"). Capturar a tela preenchida antes de concluir a criação. Concluir a criação da tabela.
 
 Com a tabela criada, adicione um item manualmente pela interface, e depois consulte-o de volta.
 
@@ -69,7 +69,7 @@ Com a tabela criada, adicione um item manualmente pela interface, e depois consu
 O **Amazon ElastiCache** gerencia bancos de dados **em memória** (engines Redis e Memcached), usados como camada de cache na frente de um banco principal (relacional ou NoSQL) — dados acessados com muita frequência ficam guardados em memória RAM, ordens de magnitude mais rápida de ler do que um disco, reduzindo tanto a latência percebida pelo usuário quanto a carga direta no banco principal.
 
 ![Console do ElastiCache mostrando a tela de criação de um cluster Redis ou Memcached, com a escolha de engine e tipo de nó](screenshots/13-opcoes-de-banco-de-dados/05-elasticache-criar-cluster.png)
-> `[PRINT]` Passo a passo para capturar: no Console, buscar "ElastiCache" e abrir o serviço. Clicar em "Create cache" (ou "Redis clusters" → "Create"). Capturar a tela do assistente mostrando a escolha entre engine Redis e Memcached, e a seleção de tipo de nó. Não é necessário concluir a criação — ElastiCache não tem cobertura de Free Tier tão simples quanto DynamoDB.
+> `[PRINT]` Passo a passo para capturar: abrir o ElastiCache direto em https://console.aws.amazon.com/elasticache/home?region=sa-east-1 (ou buscar "ElastiCache" na barra de busca do Console). Clicar em "Create cache" (ou "Redis clusters" → "Create"). Capturar a tela do assistente mostrando a escolha entre engine Redis e Memcached, e a seleção de tipo de nó. Não é necessário concluir a criação — ElastiCache não tem cobertura de Free Tier tão simples quanto DynamoDB.
 
 ## Migrando para a AWS: DMS e SCT
 
