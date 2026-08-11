@@ -71,9 +71,22 @@ O **AWS Backup** centraliza e automatiza a política de backup de múltiplos ser
 ![Console do AWS Backup mostrando a tela de criação de um backup plan, com a frequência de backup e os serviços de origem selecionáveis](screenshots/12-opcoes-de-armazenamento/05-aws-backup-plan.png)
 > `[PRINT]` Passo a passo para capturar: no Console, buscar "Backup" e abrir "AWS Backup". Clicar em "Create Backup plan". Capturar a tela do assistente mostrando as opções de frequência de backup e período de retenção. Não é necessário concluir a criação de um plano real.
 
-## Limpando o laboratório
+## Práticas
 
-`[CUSTO]` O S3 tem 5 GB de armazenamento gratuito por mês no Free Tier — um bucket com um ou dois arquivos pequenos e algumas versões fica muito abaixo desse limite, então este laboratório não deveria gerar cobrança relevante mesmo deixado ativo. Ainda assim, para manter o hábito de limpeza: se quiser remover o bucket ao final, primeiro é preciso excluir todos os objetos (incluindo todas as versões, já que o versionamento foi ativado) antes que o bucket em si possa ser excluído — o S3 não permite excluir um bucket não vazio, o mesmo comportamento de segurança já visto no módulo 8 com CloudFormation.
+### Prática isolada
+
+O bucket `trilha-cloud-aws-lab12-...` criado ao longo deste módulo, com versionamento e a lifecycle rule configurados, já é a prática isolada completa. `[CUSTO]` O S3 tem 5 GB de armazenamento gratuito por mês no Free Tier — um bucket com um ou dois arquivos pequenos e algumas versões fica muito abaixo desse limite, então este laboratório não deveria gerar cobrança relevante mesmo deixado ativo. Ainda assim, para manter o hábito de limpeza: se quiser remover o bucket ao final, primeiro é preciso excluir todos os objetos (incluindo todas as versões, já que o versionamento foi ativado) antes que o bucket em si possa ser excluído — o S3 não permite excluir um bucket não vazio, o mesmo comportamento de segurança já visto no módulo 8 com CloudFormation.
+
+### Contribuição ao projeto integrador
+
+O TrilhaShop ganha seu bucket real de imagens de produto — o mesmo que a política de menor privilégio do módulo 3 já foi escrita para proteger.
+
+![Console do S3 criando o bucket trilhashop-product-images, com versionamento habilitado já na criação](screenshots/12-opcoes-de-armazenamento/06-s3-bucket-trilhashop-product-images.png)
+> `[PRINT]` Passo a passo para capturar: "S3" → "Create bucket". Nome: `trilhashop-product-images` (se já estiver em uso globalmente por outra conta, usar um sufixo como `trilhashop-product-images-<suas-iniciais>`). Região: São Paulo. Na seção "Bucket Versioning", selecionar "Enable" já nesta tela (diferente do bucket de prática, que ativou depois). Manter "Block all public access" marcado — mesmo sendo imagens de produto, o acesso público vai ser mediado pelo CloudFront (módulo 4/16), não pelo bucket diretamente. Concluir a criação.
+
+Configure uma lifecycle rule transicionando imagens para **Standard-IA** depois de 90 dias (fotos de produtos antigos, fora de catálogo ativo, são acessadas com pouca frequência, mas ainda podem ser consultadas em pedidos históricos). Por fim, volte à política `trilhashop-leitura-imagens-produto` escrita no módulo 3 e confirme que o nome do bucket nela bate exatamente com o bucket real recém-criado — se você usou um sufixo diferente por causa de unicidade global, edite a política para refletir o nome real.
+
+`[CUSTO]` Um bucket de imagens de produto, nesta escala de projeto de estudo, fica bem dentro do Free Tier de 5 GB. Nada a pausar — bucket S3 não cobra por hora, só pelo volume armazenado.
 
 ## Erros comuns nesta fase
 
@@ -107,3 +120,4 @@ Você está pronto para o módulo 13 quando consegue, sem consultar:
 - [ ] Explicar quando usar EFS em vez de EBS (acesso compartilhado simultâneo por múltiplos clientes).
 - [ ] Explicar o papel do Storage Gateway (ponte híbrida) e do AWS Backup (centralização de backups).
 - [ ] Ter criado, no Console real, um bucket S3, enviado um objeto, ativado versionamento e configurado uma lifecycle rule.
+- [ ] Ter criado o bucket real `trilhashop-product-images` e conferido que a policy do módulo 3 aponta para o nome certo.

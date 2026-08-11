@@ -95,9 +95,61 @@ Lambda tem limites de execução que existem justamente para reforçar seu prop�
 
 Juntando os módulos 9, 10 e 14: EC2 dá controle total sobre um servidor completo, ao custo de gerenciar tudo a partir do sistema operacional; containers com ECS/Fargate empacotam a aplicação de forma portátil, com Fargate removendo a gestão de instância; Lambda remove até a noção de processo continuamente rodando, cobrando estritamente por execução, ideal para cargas orientadas a evento, esporádicas ou com picos muito variáveis. Nenhuma das três é universalmente "melhor" — é comum uma arquitetura real combinar as três ao mesmo tempo, cada uma no componente onde faz mais sentido.
 
-## Limpando o laboratório
+## Práticas
 
-`[CUSTO]` O Lambda tem uma camada sempre gratuita generosa (1 milhão de invocações por mês, permanentemente, não apenas nos primeiros 12 meses) — as poucas execuções deste laboratório não geram custo algum. Ainda assim, para manter o hábito de limpeza: exclua a Function URL (ou a função inteira, se não for reutilizá-la) ao final, através de "Actions" → "Delete function" na página da função.
+### Prática isolada
+
+A função `trilha-cloud-lab14` criada ao longo deste módulo, testada e exposta por Function URL, já é a prática isolada completa. `[CUSTO]` O Lambda tem uma camada sempre gratuita generosa (1 milhão de invocações por mês, permanentemente, não apenas nos primeiros 12 meses) — as poucas execuções deste laboratório não geram custo algum. Ainda assim, para manter o hábito de limpeza: exclua a Function URL (ou a função inteira, se não for reutilizá-la) ao final, através de "Actions" → "Delete function" na página da função.
+
+### Contribuição ao projeto integrador
+
+A API de pedidos real do TrilhaShop — a primeira vez, nesta trilha, que API Gateway, Lambda, DynamoDB e IAM se conectam de ponta a ponta num recurso do projeto.
+
+Primeiro, dê à `trilhashop-lambda-role` (criada vazia no módulo 3) a permissão exata de que ela precisa — nem mais, nem menos:
+
+![Política inline anexada à role trilhashop-lambda-role, concedendo dynamodb:PutItem e dynamodb:GetItem apenas na tabela trilhashop-pedidos](screenshots/14-computacao-baseada-em-funcoes-lambda/06-iam-role-lambda-policy-dynamodb.png)
+> `[PRINT]` Passo a passo para capturar: "IAM" → "Roles" → `trilhashop-lambda-role` → "Add permissions" → "Create inline policy" → aba JSON. Colar uma política permitindo `dynamodb:PutItem` e `dynamodb:GetItem` apenas no ARN da tabela `trilhashop-pedidos` (visível na página da tabela, no DynamoDB). Nomear a policy como `trilhashop-lambda-dynamodb-pedidos`. Capturar a tela antes de salvar.
+
+Crie a função `trilhashop-pedidos-api`, desta vez escolhendo a `trilhashop-lambda-role` existente em vez de deixar o Lambda criar uma role nova automaticamente:
+
+```python
+import json
+import boto3
+import uuid
+
+dynamodb = boto3.resource("dynamodb")
+tabela = dynamodb.Table("trilhashop-pedidos")
+
+def lambda_handler(event, context):
+    corpo = json.loads(event.get("body") or "{}")
+    id_pedido = str(uuid.uuid4())
+    tabela.put_item(Item={
+        "idPedido": id_pedido,
+        "produto": corpo.get("produto", "desconhecido"),
+        "quantidade": corpo.get("quantidade", 1)
+    })
+    return {
+        "statusCode": 201,
+        "body": json.dumps({"idPedido": id_pedido, "status": "criado"})
+    }
+```
+
+Em seguida, crie uma API HTTP no API Gateway na frente dela:
+
+![Console do API Gateway criando uma HTTP API, com a rota POST /pedidos integrada à função trilhashop-pedidos-api](screenshots/14-computacao-baseada-em-funcoes-lambda/07-api-gateway-rota-pedidos.png)
+> `[PRINT]` Passo a passo para capturar: "API Gateway" → "Create API" → "HTTP API" → "Build". Em "Integrations", adicionar a Lambda `trilhashop-pedidos-api`. Configurar a rota `POST /pedidos`. Aceitar o stage padrão `$default` com auto-deploy. Capturar a tela de revisão antes de criar.
+
+Teste a API real com um `curl` (no CloudShell, retomando o módulo 7) contra a URL de invocação gerada pelo API Gateway:
+
+```bash
+curl -X POST https://<api-id>.execute-api.sa-east-1.amazonaws.com/pedidos \
+  -H "Content-Type: application/json" \
+  -d '{"produto": "Camiseta TrilhaShop", "quantidade": 2}'
+```
+
+A resposta deve trazer um `idPedido` novo, e o item correspondente deve aparecer em "Explore table items" na tabela `trilhashop-pedidos` (módulo 13) — a primeira transação de ponta a ponta do TrilhaShop, do HTTP até o banco de dados.
+
+`[CUSTO]` API Gateway (HTTP API) e Lambda cobram por requisição — nesta escala de testes, o custo é irrelevante e cai dentro da camada sempre gratuita de ambos. Nada a pausar aqui.
 
 ## Erros comuns nesta fase
 
@@ -132,3 +184,4 @@ Você está pronto para o módulo 15 quando consegue, sem consultar:
 - [ ] Explicar o limite máximo de execução do Lambda (15 minutos) e por que isso o torna inadequado para processamento de longa duração.
 - [ ] Comparar EC2, containers (Fargate) e Lambda em uma frase cada, quanto a controle vs. gestão.
 - [ ] Ter criado, testado e exposto publicamente, no Console real, uma função Lambda.
+- [ ] Ter criado a API real `POST /pedidos` (API Gateway + `trilhashop-pedidos-api` + `trilhashop-pedidos`) e confirmado, via `curl`, um pedido gravado de ponta a ponta.

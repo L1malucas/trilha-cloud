@@ -66,6 +66,30 @@ Um ponto de confusão recorrente, inclusive em prova, é misturar CloudWatch com
 
 `[CUSTO]` Criar um Auto Scaling Group ou um Load Balancer de verdade gera cobrança contínua enquanto estiver ativo — um ALB, por exemplo, é cobrado por hora de disponibilidade mesmo sem tráfego algum. Os passos deste módulo foram roteirizados para parar antes da confirmação final de criação, exatamente para evitar esse custo durante a exploração. Se você quiser ir além e criar um ambiente completo de teste, lembre de excluir o Load Balancer e reduzir o Auto Scaling Group a zero instâncias (ou excluí-lo) ao final.
 
+## Práticas
+
+### Prática isolada
+
+Crie um Auto Scaling Group totalmente descartável, fora da VPC do projeto, só para sentir o mecanismo de escalonamento manual. Use "EC2" → "Launch Templates" → "Create launch template", com uma AMI Amazon Linux qualquer, tipo `t2.micro`, sem user data. Em seguida, "Auto Scaling Groups" → "Create Auto Scaling group", usando esse launch template, na VPC padrão da conta, com capacidade mínima 0, desejada 0, máxima 2. Depois de criado, edite o ASG e mude a capacidade desejada para 2 — observe, na aba "Activity", o ASG lançando duas instâncias sozinho, sem você ter clicado em "Launch instance" em nenhum momento. Depois, volte a capacidade desejada para 0 e confirme que as instâncias são encerradas automaticamente. Ao final, exclua o Auto Scaling Group e o launch template — nada disso deve sobreviver ao módulo.
+
+`[CUSTO]` As duas instâncias `t2.micro` criadas temporariamente pelo exercício ficam dentro do Free Tier se você não deixá-las rodando por muito tempo — o objetivo é só ver a mudança de capacidade acontecer (poucos minutos), depois zerar de novo.
+
+### Contribuição ao projeto integrador
+
+Agora a peça real: o Load Balancer e o Auto Scaling Group que vão sustentar o catálogo do TrilhaShop, dentro da `trilhashop-vpc` criada no módulo 4. Este módulo monta a estrutura; o módulo 9 volta aqui para colocar a aplicação de verdade dentro dela.
+
+![Assistente de criação do Application Load Balancer trilhashop-alb, com as subnets públicas da trilhashop-vpc selecionadas e o trilhashop-web-sg associado](screenshots/06-auto-scaling-e-monitoramento/05-alb-trilhashop-configuracao.png)
+> `[PRINT]` Passo a passo para capturar: "EC2" → "Load Balancers" → "Create load balancer" → "Application Load Balancer". Nome: `trilhashop-alb`. VPC: `trilhashop-vpc`. Mapear as duas subnets **públicas** (`trilhashop-subnet-public1...`, `-public2...`). Security group: `trilhashop-web-sg` (criado no módulo 4). Criar um novo target group `trilhashop-catalogo-tg` (tipo instância, porta 80, mesma VPC) durante o mesmo fluxo. Capturar a tela com essa configuração preenchida antes de criar.
+
+Com o ALB criado, monte o launch template e o ASG que vão preencher esse target group:
+
+![Auto Scaling Group trilhashop-catalogo-asg configurado, mostrando a associação com o target group trilhashop-catalogo-tg e as subnets privadas selecionadas](screenshots/06-auto-scaling-e-monitoramento/06-asg-trilhashop-configuracao.png)
+> `[PRINT]` Passo a passo para capturar: criar o launch template `trilhashop-catalogo-lt` (AMI Amazon Linux 2023, tipo `t2.micro` ou `t3.micro`, Security Group `trilhashop-app-sg` — **sem user data ainda**, isso vem no módulo 9). Depois, "Auto Scaling Groups" → "Create Auto Scaling group", usando esse launch template, na `trilhashop-vpc`, subnets **privadas** (`-private1...`, `-private2...`). Na etapa de load balancing, anexar ao target group `trilhashop-catalogo-tg` já criado. Configurar capacidade mínima 0, desejada 0, máxima 2 — deliberadamente **zero por enquanto**, porque o launch template ainda não tem nenhuma aplicação real para servir. Capturar a tela de revisão antes de criar.
+
+Deixe a capacidade desejada em 0 até o módulo 9 — não há necessidade de pagar por instâncias rodando um sistema operacional vazio. O ALB, porém, já fica no ar (e já começa a cobrar por hora), servindo como a peça de rede que o módulo 9 vai popular de conteúdo real.
+
+`[CUSTO]` A partir daqui, o TrilhaShop tem um segundo recurso cobrando por hora: o Application Load Balancer, independentemente de haver instância saudável atrás dele ou não. Ver a tabela de pausa em `00_indice.md` — se for pausar por muito tempo, o ALB pode ser excluído e recriado depois (o target group e o ASG, com capacidade 0, não custam nada enquanto isso).
+
 ## Erros comuns nesta fase
 
 O erro mais frequente é achar que o Auto Scaling Group reage instantaneamente — na prática, ele espera a métrica se manter fora do alvo por um período configurável antes de agir, para evitar "flapping" (adicionar e remover instâncias repetidamente por causa de um pico momentâneo). O segundo erro é esquecer que reduzir o número mínimo do ASG para 0 durante um laboratório não é o mesmo que excluir o grupo — o ASG em si não gera custo, mas vale ter o hábito de limpar completamente o que não vai mais ser usado.
@@ -97,3 +121,5 @@ Você está pronto para o módulo 07 quando consegue, sem consultar:
 - [ ] Explicar como Load Balancer e Auto Scaling Group trabalham juntos.
 - [ ] Diferenciar CloudWatch de CloudTrail com uma frase para cada.
 - [ ] Ter visto, no Console real, o assistente de criação de um Load Balancer, de um Auto Scaling Group, uma métrica com alarme no CloudWatch, e o event history do CloudTrail.
+- [ ] Ter criado e destruído um ASG descartável, observando o escalonamento manual de 0 para 2 e de volta a 0.
+- [ ] Ter criado, de verdade, o `trilhashop-alb` e o `trilhashop-catalogo-asg` (capacidade 0 por enquanto) na `trilhashop-vpc`.

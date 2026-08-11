@@ -76,6 +76,23 @@ Arquiteturas **desacopladas com filas** usam serviços como o Amazon SQS (mencio
 
 `[APROFUNDAMENTO]` Desenhar essas arquiteturas — decidir onde exatamente colocar uma fila, como dimensionar réplicas multi-region, qual estratégia de failover usar entre elas — é o núcleo do trabalho de um Solutions Architect Associate. Para o Cloud Practitioner, o que importa é reconhecer o padrão pelo nome e pelo cenário de uso, não desenhá-lo do zero.
 
+## Práticas
+
+### Prática isolada
+
+No Well-Architected Tool, defina uma segunda workload, hipotética e sem nenhuma relação com o TrilhaShop — por exemplo, "Blog pessoal em WordPress" ou "Sistema interno de ponto eletrônico". Percorra o questionário completo de **dois** pilares à sua escolha (não precisa fazer os seis), respondendo com a arquitetura mais simples e ingênua que você conseguir imaginar para essa workload (um único servidor, sem backup, sem redundância). Ao final, veja o relatório de riscos identificados que a ferramenta gera. O objetivo é sentir, na prática, como o questionário expõe pontos fracos de uma arquitetura ruim — antes de aplicar a mesma ferramenta a um projeto que você realmente está construindo.
+
+### Contribuição ao projeto integrador
+
+Agora sim, contra o TrilhaShop de verdade. Volte ao Well-Architected Tool e defina a workload real do projeto:
+
+![Well-Architected Tool com a workload "TrilhaShop" definida, campo de descrição preenchido mencionando a VPC criada no módulo 4](screenshots/05-arquitetura-de-nuvem/03-well-architected-workload-trilhashop.png)
+> `[PRINT]` Passo a passo para capturar: "Well-Architected Tool" → "Define workload". Nome: `TrilhaShop`. Região: São Paulo. Descrição: mencionar que, até este ponto, o projeto tem uma VPC com subnets públicas/privadas em 2 AZs e três Security Groups em cadeia (o que foi construído no módulo 4). Capturar a tela preenchida antes de salvar.
+
+Responda ao menos o questionário do pilar **Confiabilidade** e do pilar **Segurança** contra o que já existe — a resposta honesta, neste ponto da trilha, vai apontar riscos reais (por exemplo, "nenhum recurso de computação ainda existe, então não há redundância de aplicação a avaliar" ou "MFA está ativo no root, mas ainda não há CloudTrail configurado explicitamente para auditoria"). Isso é esperado: o TrilhaShop está no início, e o valor do exercício é justamente ver a lista de riscos diminuir a cada módulo que você revisitar esta mesma revisão. Guarde a revisão salva no Console — os módulos 9, 13 e 16 vão voltar a ela.
+
+`[CUSTO]` O Well-Architected Tool não tem custo de uso. Nada a pausar aqui.
+
 ## Erros comuns nesta fase
 
 O erro mais comum é tratar os seis pilares como uma lista neutra em que "mais de tudo é sempre melhor" — na prática, otimizar agressivamente por custo frequentemente reduz redundância (menos réplicas rodando), e otimizar agressivamente por performance frequentemente aumenta custo. A prova gosta de testar justamente esse tipo de trade-off, então desconfie de qualquer alternativa que prometa maximizar dois pilares conflitantes ao mesmo tempo sem custo nenhum. O segundo erro é confundir "design para falha" com pessimismo operacional — é exatamente o oposto: é o que permite construir sistemas confiáveis usando componentes individualmente imperfeitos, que é a realidade de qualquer hardware em escala.
@@ -109,3 +126,5 @@ Você está pronto para o módulo 06 quando consegue, sem consultar:
 - [ ] Explicar os quatro princípios de design (desacoplamento, redundância, elasticidade, design para falha) com um exemplo prático de cada.
 - [ ] Reconhecer os padrões multi-AZ, multi-region e arquitetura desacoplada com filas, e o cenário típico de cada.
 - [ ] Ter rodado, no Console real, ao menos uma pergunta do Well-Architected Tool e visto o painel do Trusted Advisor.
+- [ ] Ter avaliado uma workload hipotética contra dois pilares na prática isolada.
+- [ ] Ter criado a revisão real "TrilhaShop" no Well-Architected Tool, com os pilares Confiabilidade e Segurança respondidos contra o estado atual do projeto.

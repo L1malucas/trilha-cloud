@@ -90,6 +90,16 @@ aws ec2 describe-availability-zones --region sa-east-1 --output table
 
 `[CUSTO]` Nenhuma das ações deste módulo cria um recurso cobrável. Abrir o seletor de região, navegar até o campo de AZ no assistente do EC2 sem concluir o lançamento, consultar o Service Health Dashboard e rodar os comandos `describe-*` acima são todas operações de leitura, sem custo. Mesmo assim, é boa prática fechar o assistente de lançamento do EC2 sem clicar em "Launch instance" — é o único passo deste módulo onde um clique a mais geraria cobrança.
 
+## Práticas
+
+### Prática isolada
+
+Usando o CloudShell, rode `aws ec2 describe-availability-zones --region <regiao> --output table` para três regiões diferentes — por exemplo `sa-east-1` (São Paulo), `us-east-1` (Norte da Virgínia) e `eu-west-1` (Irlanda). Monte uma tabela simples (à mão, num arquivo de texto) comparando o número de AZs disponíveis em cada uma. Depois, rode `aws ec2 describe-regions --output table` sem o filtro de região nenhuma vez, e conte quantas regiões aparecem na lista completa retornada. O objetivo é sair da abstração "a AWS tem regiões e AZs" e ver, em números reais, que essa infraestrutura não é uniforme — algumas regiões têm mais AZs que outras, e isso é parte do que se leva em conta numa decisão de arquitetura de alta disponibilidade.
+
+### Contribuição ao projeto integrador
+
+Nenhum recurso novo ainda, mas a segunda decisão formal do TrilhaShop: registre, no mesmo documento de decisão iniciado no módulo 1, a região oficial do projeto (**São Paulo — `sa-east-1`**, pelo critério de latência para um público brasileiro) e as duas Availability Zones que a VPC do módulo 4 vai usar (`sa-east-1a` e `sa-east-1b` — duas é o mínimo para viabilizar a redundância que os módulos 6 e 11 vão explorar). Antes de seguir para o módulo 3, vale um último passo prático: abrir o Service Health Dashboard (visto acima) e confirmar que não há nenhum incidente em aberto para `sa-east-1` — um hábito de checagem que vale manter no início de cada sessão de estudo daqui em diante, não só agora.
+
 ## Erros comuns nesta fase
 
 Vale reforçar, fora do fluxo de leitura, os dois deslizes mais comuns: primeiro, assumir que dados ou recursos criados numa região aparecem automaticamente em outra — cada região é um universo isolado; segundo, subestimar o critério de conformidade legal na escolha de região, tratando-a como uma decisão puramente técnica, quando na prática ela costuma ser a primeira pergunta que uma área jurídica ou de compliance faz antes de qualquer arquitetura ser aprovada.
@@ -121,3 +131,5 @@ Você está pronto para o módulo 03 quando consegue, sem consultar:
 - [ ] Listar os três critérios principais de escolha de região (latência, custo, conformidade legal) e dar um exemplo de cenário em que cada um seria o fator decisivo.
 - [ ] Reconhecer, no nível de "o que é e quando se usa", Local Zones, Wavelength e Outposts.
 - [ ] Ter visto, no Console real, o seletor de região, o campo de AZ no assistente do EC2 e o Service Health Dashboard.
+- [ ] Ter comparado o número de AZs entre pelo menos três regiões via CLI.
+- [ ] Ter registrado a região e as duas AZs oficiais do TrilhaShop no documento de decisão.

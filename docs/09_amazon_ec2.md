@@ -48,9 +48,11 @@ Uma instância EC2, por padrão, guarda seus dados num volume do **Amazon EBS (E
 
 Uma das formas mais úteis de automatizar o EC2 é o campo **user data**: um script (geralmente shell script, no caso de instâncias Linux) que a instância executa automaticamente na primeira inicialização, sem intervenção manual. É assim que instâncias EC2 se tornam parte de um Auto Scaling Group de forma prática — cada nova instância criada automaticamente pelo ASG (módulo 6) roda o mesmo script de user data e chega pronta, com o software necessário já instalado, sem que ninguém precise conectar manualmente em cada uma para configurá-la.
 
-## `[LABORATÓRIO]` Lançando uma instância de verdade, do início ao fim
+## Práticas
 
-Este é o primeiro laboratório da trilha que efetivamente cria um recurso de computação e o mantém rodando por alguns minutos — dentro do Free Tier, sem custo, desde que você siga o passo de terminação ao final.
+### Prática isolada
+
+Este é o primeiro laboratório da trilha que efetivamente cria um recurso de computação e o mantém rodando por alguns minutos — dentro do Free Tier, sem custo, desde que você siga o passo de terminação ao final. É deliberadamente isolado da VPC do TrilhaShop (usa a VPC padrão da conta) — o objetivo aqui é só o mecanismo de lançar, servir e terminar uma instância, sem misturar com o projeto ainda.
 
 ![Assistente de lançamento de instância EC2 na etapa final de revisão, mostrando o resumo da configuração antes de clicar em "Launch instance"](screenshots/09-amazon-ec2/03-launch-instance-revisao-final.png)
 > `[PRINT]` Passo a passo para capturar: no assistente de lançamento já iniciado, escolher a AMI "Amazon Linux 2023" (marcada como Free tier eligible), o tipo de instância `t2.micro` ou `t3.micro` (o que estiver marcado como Free tier eligible na região), criar ou selecionar um par de chaves (key pair) para acesso, manter as configurações de rede padrão (VPC e subnet padrão do módulo 4), e em "Advanced details" → "User data", colar o seguinte script:
@@ -73,9 +75,35 @@ Para confirmar que o servidor web está realmente respondendo, copie o **IPv4 p�
 
 `[ATENÇÃO]` Liberar a porta 80 (ou qualquer porta) para `0.0.0.0/0` significa liberar para toda a internet, não só para você. Para este laboratório específico, isso é intencional (queremos ver a página carregando de qualquer lugar), mas é exatamente o tipo de configuração que deve ser revisitada com cuidado antes de ir para produção — a prova gosta de testar cenários em que uma porta foi deixada aberta além do necessário, violando o princípio do menor privilégio do módulo 3.
 
-## Encerrando o laboratório corretamente
+**Encerrando esta prática**: `[CUSTO]` Uma instância `t2.micro` ou `t3.micro` está coberta pelo Free Tier até um limite de 750 horas por mês (o suficiente para deixar uma instância rodando o mês inteiro, mas não duas simultaneamente pelo mesmo período) — ainda assim, o hábito correto é nunca deixar uma instância de laboratório rodando além do necessário. Para encerrar: selecione a instância na lista, clique em "Instance state" → "Terminate instance". Terminar (diferente de apenas "parar"/*stop*) destrói a instância e, por padrão, o volume EBS raiz associado a ela — não há cobrança contínua depois disso.
 
-`[CUSTO]` Uma instância `t2.micro` ou `t3.micro` está coberta pelo Free Tier até um limite de 750 horas por mês (o suficiente para deixar uma instância rodando o mês inteiro, mas não duas simultaneamente pelo mesmo período) — ainda assim, o hábito correto é nunca deixar uma instância de laboratório rodando além do necessário. Para encerrar: selecione a instância na lista, clique em "Instance state" → "Terminate instance". Terminar (diferente de apenas "parar"/*stop*) destrói a instância e, por padrão, o volume EBS raiz associado a ela — não há cobrança contínua depois disso. Se você quiser preservar a instância para revisitar depois sem incorrer em custo de computação, "Stop" é a alternativa (a instância para de rodar e de gerar cobrança de computação, mas o volume EBS associado continua existindo e gerando um custo pequeno de armazenamento).
+### Contribuição ao projeto integrador
+
+Agora sim, dentro do TrilhaShop: volte ao launch template `trilhashop-catalogo-lt`, criado vazio no módulo 6, e edite-o para adicionar o Security Group `trilhashop-app-sg` (se ainda não estiver) e o seguinte user data, servindo uma versão simples do catálogo:
+
+```bash
+#!/bin/bash
+yum update -y
+yum install -y httpd
+systemctl start httpd
+systemctl enable httpd
+cat <<'HTML' > /var/www/html/index.html
+<h1>TrilhaShop - Catalogo</h1>
+<p>Servido por uma instancia gerenciada pelo Auto Scaling Group trilhashop-catalogo-asg.</p>
+HTML
+```
+
+![Launch template trilhashop-catalogo-lt sendo editado, com uma nova versão criada incluindo o user data do catálogo](screenshots/09-amazon-ec2/05-launch-template-trilhashop-user-data.png)
+> `[PRINT]` Passo a passo para capturar: "EC2" → "Launch Templates" → `trilhashop-catalogo-lt` → "Actions" → "Modify template (create new version)". Colar o user data acima em "Advanced details". Capturar a tela antes de salvar a nova versão. Salvar, e marcar a nova versão como "Default version" do launch template.
+
+Com o template atualizado, volte ao Auto Scaling Group `trilhashop-catalogo-asg` (módulo 6) e mude a capacidade desejada de 0 para 2 — desta vez, com um propósito real: essas instâncias vão ficar registradas no target group do `trilhashop-alb` e responder de verdade.
+
+![Página do target group trilhashop-catalogo-tg mostrando duas instâncias registradas com status "healthy"](screenshots/09-amazon-ec2/06-target-group-instancias-healthy.png)
+> `[PRINT]` Passo a passo para capturar: "EC2" → "Target Groups" → `trilhashop-catalogo-tg` → aba "Targets". Aguardar as duas instâncias lançadas pelo ASG aparecerem com status "healthy" (pode levar alguns minutos, incluindo o tempo do health check). Capturar a tela com as duas instâncias e o status.
+
+Copie o DNS name do `trilhashop-alb` (na tela do Load Balancer) e acesse `http://<dns-do-alb>` no navegador — a página do catálogo deve carregar, servida por uma das duas instâncias por trás do Load Balancer, exatamente a arquitetura desenhada nos módulos 4 e 6, agora com conteúdo real. Depois de confirmar que funciona, volte ao Well-Architected Tool (módulo 5) e atualize a revisão "TrilhaShop": o risco "nenhum recurso de computação existe" não se aplica mais.
+
+`[CUSTO]` As duas instâncias do ASG agora contam para o Free Tier de 750 horas/mês — dentro do limite se for só este par. Ao pausar entre sessões de estudo, reduza a capacidade desejada do ASG para 0 (ver a tabela em `00_indice.md`) — o launch template e o target group não custam nada vazios.
 
 ## Erros comuns nesta fase
 
@@ -109,4 +137,5 @@ Você está pronto para o módulo 10 quando consegue, sem consultar:
 - [ ] Explicar a diferença entre EBS e instance store.
 - [ ] Explicar o que é user data e por que ele é essencial para Auto Scaling funcionar sem intervenção manual.
 - [ ] Explicar a diferença entre "Stop" e "Terminate" e o impacto de cada um no billing.
-- [ ] Ter lançado, acessado via navegador, e terminado uma instância EC2 real.
+- [ ] Ter lançado, acessado via navegador, e terminado uma instância EC2 real (prática isolada).
+- [ ] Ter atualizado o `trilhashop-catalogo-lt` com o user data real, escalado o ASG para 2 instâncias, e acessado o catálogo pelo DNS do `trilhashop-alb`.

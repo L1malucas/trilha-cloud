@@ -58,6 +58,30 @@ Para containers que precisam se localizar uns aos outros dinamicamente (por exem
 
 `[CUSTO]` Diferente do laboratório do EC2 no módulo anterior, este módulo não chega a rodar um container de verdade — criar um cluster ECS vazio não tem custo por si só, mas rodar uma task (seja em EC2 ou em Fargate) gera cobrança pelo tempo em que ela fica ativa, e Fargate, em particular, não tem cobertura de Free Tier tão generosa quanto o EC2. Os prints deste módulo foram roteirizados para parar nas telas de configuração, sem lançar uma task real — se você quiser ir além por conta própria, lembre de derrubar qualquer service e cluster criado ao final para não deixar cobrança rodando.
 
+## Práticas
+
+### Prática isolada
+
+Suba uma única task Fargate descartável, fora do TrilhaShop, só para ver o ciclo completo de container gerenciado funcionando. Crie um cluster ECS vazio (launch type Fargate), depois uma task definition simples usando a imagem pública `public.ecr.aws/nginx/nginx:latest`, 0.25 vCPU / 0.5 GB de memória, numa subnet pública qualquer com IP público atribuído automaticamente e um Security Group liberando a porta 80. Rode a task manualmente ("Run new Task", não um Service) e, depois que o status virar `RUNNING`, copie o IP público da task e acesse no navegador — a página padrão do nginx deve aparecer. Confirme que funcionou e então pare a task ("Stop") e exclua o cluster.
+
+`[CUSTO]` Fargate cobra por vCPU e memória alocados enquanto a task roda, por segundo. Uma única task pequena rodando por poucos minutos custa frações de centavo, mas não tem a mesma cobertura generosa de Free Tier que o EC2 — pare a task assim que confirmar que ela respondeu.
+
+### Contribuição ao projeto integrador
+
+O carrinho de compras do TrilhaShop vira um segundo serviço, real e independente do catálogo em EC2, rodando na mesma VPC:
+
+![Console do ECS na criação do cluster trilhashop-cluster, com Fargate selecionado como infraestrutura](screenshots/10-aws-container-services-networking/03-ecs-cluster-trilhashop.png)
+> `[PRINT]` Passo a passo para capturar: "ECS" → "Create cluster". Nome: `trilhashop-cluster`. Infraestrutura: AWS Fargate (serverless). Capturar a tela antes de criar.
+
+Crie uma task definition `trilhashop-carrinho-td` usando a mesma imagem de exemplo `public.ecr.aws/nginx/nginx:latest` (um projeto real usaria uma imagem própria publicada no ECR, mas para os fins desta trilha o nginx já demonstra o mecanismo completo), 0.25 vCPU / 0.5 GB. Em seguida, crie um **Service** (não uma task avulsa desta vez, porque um service mantém réplicas rodando continuamente, o equivalente em containers do Auto Scaling Group do módulo 6) chamado `trilhashop-carrinho-service`, com 1 réplica desejada, nas subnets **privadas** da `trilhashop-vpc` (módulo 4), Security Group `trilhashop-app-sg`.
+
+![Service trilhashop-carrinho-service rodando no cluster, mostrando 1/1 tasks running](screenshots/10-aws-container-services-networking/04-ecs-service-carrinho-rodando.png)
+> `[PRINT]` Passo a passo para capturar: depois de criar o service, capturar a tela do cluster mostrando `trilhashop-carrinho-service` com "Running tasks" = 1 e "Desired tasks" = 1.
+
+Como o service está em subnet privada (sem IP público, seguindo o mesmo padrão de defesa em profundidade do catálogo em EC2), ele não é acessível diretamente do navegador — em uma arquitetura de produção completa, um segundo target group no `trilhashop-alb` (ou um Load Balancer dedicado) exporia esse serviço externamente, o mesmo padrão do módulo 6 aplicado a um destino de container em vez de uma instância. Para os fins desta trilha, confirmar "1/1 tasks running" já demonstra o serviço operando corretamente dentro da rede do projeto.
+
+`[CUSTO]` O service do carrinho fica rodando continuamente enquanto `desired count = 1`, cobrando por vCPU/memória alocados. Ao pausar entre sessões, reduza o `desired count` do service para 0 (ver tabela em `00_indice.md`) — o cluster e a task definition em si não custam nada.
+
 ## Erros comuns nesta fase
 
 O erro mais comum é achar que Fargate "não tem servidor" no sentido literal — existe servidor por trás, só que ele é inteiramente gerenciado e abstraído pela AWS, e você paga pelo consumo de CPU/memória declarado, não por uma instância específica. O segundo erro é confundir ECR (onde as imagens ficam guardadas) com ECS (onde os containers efetivamente rodam) — são serviços complementares, não alternativos um ao outro.
@@ -90,3 +114,5 @@ Você está pronto para o módulo 11 quando consegue, sem consultar:
 - [ ] Reconhecer o EKS como a oferta gerenciada de Kubernetes da AWS, e Kubernetes como padrão aberto, não proprietário.
 - [ ] Explicar como os mesmos conceitos de VPC/Security Group do módulo 4 se aplicam a containers no modo de rede `awsvpc`.
 - [ ] Ter navegado, no Console real, pelas telas de criação de cluster ECS e de repositório ECR.
+- [ ] Ter rodado e parado uma task Fargate descartável, confirmando resposta HTTP dela.
+- [ ] Ter criado, de verdade, o `trilhashop-cluster` e o `trilhashop-carrinho-service` rodando 1/1 na `trilhashop-vpc`.

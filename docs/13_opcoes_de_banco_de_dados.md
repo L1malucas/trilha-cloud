@@ -81,7 +81,27 @@ Para organizações movendo um banco de dados existente (seja de outro provedor 
 
 Juntando tudo: um sistema transacional tradicional, com relações complexas entre entidades e necessidade de consultas SQL variadas — RDS ou Aurora. Uma aplicação com necessidade de escala horizontal extrema, padrão de acesso simples (buscar por chave) e volume potencialmente massivo — DynamoDB. Uma camada de aceleração na frente de um banco já existente, para reduzir latência de leituras repetidas — ElastiCache. Uma migração de um banco existente para a AWS — DMS (dados) e, se a engine muda, SCT (esquema) primeiro.
 
-`[CUSTO]` A tabela DynamoDB criada neste laboratório, no modo on-demand com pouquíssimos itens, fica dentro da camada sempre gratuita do DynamoDB — mas vale o hábito de limpeza: se não for reutilizá-la, exclua a tabela ao final ("Delete table", dentro do Console do DynamoDB). Nenhum banco RDS ou cluster ElastiCache foi de fato criado neste módulo — os assistentes foram roteirizados para parar antes da confirmação final, exatamente para evitar o custo por hora associado a essas instâncias, que continua rodando mesmo sem uso ativo até serem explicitamente excluídas.
+## Práticas
+
+### Prática isolada
+
+A tabela DynamoDB `trilha-cloud-lab13` criada ao longo deste módulo, com o item adicionado e consultado, já é a prática isolada completa. `[CUSTO]` No modo on-demand com pouquíssimos itens, ela fica dentro da camada sempre gratuita do DynamoDB — mas vale o hábito de limpeza: se não for reutilizá-la, exclua a tabela ao final ("Delete table", dentro do Console do DynamoDB).
+
+### Contribuição ao projeto integrador
+
+O TrilhaShop ganha os dois bancos reais desta vez — um relacional para o catálogo, um NoSQL para os pedidos, exatamente o "guia de decisão" acima aplicado a um projeto de verdade.
+
+![Assistente de criação do RDS trilhashop-catalogo-db, com engine PostgreSQL, template Free tier, e a VPC/subnets privadas da trilhashop-vpc selecionadas](screenshots/13-opcoes-de-banco-de-dados/06-rds-trilhashop-configuracao.png)
+> `[PRINT]` Passo a passo para capturar: "RDS" → "Create database" → "Standard create" → engine PostgreSQL → template "Free tier". Identificador da instância: `trilhashop-catalogo-db`. Em "Connectivity", VPC: `trilhashop-vpc`; "DB Subnet Group": criar um novo grupo usando as duas subnets **privadas** do módulo 4; VPC Security Group: selecionar o `trilhashop-db-sg` (criado no módulo 4) em vez de criar um novo; "Public access": **No**. Capturar a tela com essa configuração de rede preenchida antes de criar. Concluir a criação (a instância leva alguns minutos para ficar disponível).
+
+O `trilhashop-db-sg` só aceita conexões vindas do `trilhashop-app-sg` (regra criada no módulo 4) — ou seja, mesmo com a instância criada, nada fora da camada de aplicação do TrilhaShop consegue se conectar a ela, nem você, diretamente da sua máquina. Essa é a cadeia de menor privilégio do módulo 3 e do módulo 4 funcionando de ponta a ponta num recurso real.
+
+Em seguida, crie a tabela real de pedidos no DynamoDB:
+
+![Console do DynamoDB criando a tabela trilhashop-pedidos, com chave de partição id-pedido](screenshots/13-opcoes-de-banco-de-dados/07-dynamodb-trilhashop-pedidos.png)
+> `[PRINT]` Passo a passo para capturar: "DynamoDB" → "Create table". Nome: `trilhashop-pedidos`. Partition key: `idPedido` (String). Capacity mode: On-demand. Capturar a tela preenchida antes de criar. Concluir a criação — o módulo 14 volta aqui para gravar pedidos de verdade via Lambda.
+
+`[CUSTO]` Este é o recurso mais caro do TrilhaShop até agora: o RDS, mesmo `db.t3.micro` dentro do Free Tier (750 horas/mês), cobra por hora enquanto a instância estiver `available`. Ao pausar entre sessões de estudo mais longas, use "Actions" → "Stop temporarily" — mas lembre da ressalva da tabela em `00_indice.md`: a AWS reinicia uma instância RDS parada automaticamente depois de 7 dias, então pausas muito longas exigem parar de novo periodicamente. A tabela DynamoDB de pedidos, em modo on-demand e vazia, não custa nada parada.
 
 ## Erros comuns nesta fase
 
@@ -116,3 +136,4 @@ Você está pronto para o módulo 14 quando consegue, sem consultar:
 - [ ] Explicar o papel do ElastiCache como camada de cache em memória.
 - [ ] Diferenciar DMS (migração de dados) de SCT (conversão de esquema).
 - [ ] Ter criado, no Console real, uma tabela DynamoDB, adicionado e consultado um item nela.
+- [ ] Ter criado, de verdade, o `trilhashop-catalogo-db` (RDS, sem acesso público, atrás do `trilhashop-db-sg`) e a tabela `trilhashop-pedidos` no DynamoDB.

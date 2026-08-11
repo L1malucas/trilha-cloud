@@ -77,6 +77,41 @@ Nem todo tráfego que entra numa aplicação AWS é um usuário navegando num si
 
 `[CUSTO]` Este módulo, do jeito que os prints foram roteirizados, não cria nenhum recurso cobrável — visualizar a VPC padrão, as route tables, os security groups, as NACLs, e abrir os assistentes de criação do Route 53 e do CloudFront sem concluir são todas ações sem custo. O ponto de atenção fica para quando você for além da exploração: criar um **NAT Gateway** de verdade tem custo por hora e por dado processado, mesmo dentro do Free Tier — diferente de um Internet Gateway, que não tem custo próprio. Se em algum momento futuro desta trilha você criar um NAT Gateway para um laboratório, lembre de excluí-lo ao final.
 
+## Práticas
+
+### Prática isolada
+
+Antes de clicar em qualquer assistente, pratique no papel: dado o bloco `10.0.0.0/16`, divida-o em quatro sub-redes de `/24` cada, e escreva os quatro intervalos resultantes (primeiro e último endereço de cada uma). Depois, responda por escrito: quantos endereços IP utilizáveis existem numa sub-rede `/24` (lembre que a AWS reserva 5 endereços por subnet, não só o de rede e broadcast)? Esse cálculo é uma habilidade que a prova cobra diretamente e que o Console não ensina sozinho — o assistente da AWS aceita qualquer CIDR válido sem explicar a aritmética por trás.
+
+Com o cálculo feito, crie uma VPC pequena e descartável só para praticar o assistente: no Console, "VPC" → "Create VPC", escolha a opção **"VPC and more"** (não "VPC only") — ela cria automaticamente subnets públicas e privadas distribuídas por AZs, Internet Gateway e route tables num único fluxo, exatamente a base que a contribuição ao projeto integrador abaixo vai usar de verdade. Use o bloco `10.99.0.0/16`, 2 AZs, 1 subnet pública e 1 privada por AZ, e **não** marque a opção de criar NAT Gateway (para este exercício descartável, não precisa). Depois de ver os recursos criados no "Resource Map", exclua a VPC inteira (a própria tela de exclusão remove todos os recursos dependentes automaticamente).
+
+![Tela de resumo (Resource Map) de uma VPC recém-criada pelo assistente "VPC and more", mostrando subnets, route tables e Internet Gateway conectados visualmente](screenshots/04-redes-e-entrega-de-conteudo/06-vpc-and-more-resource-map.png)
+> `[PRINT]` Passo a passo para capturar: depois de criar a VPC de teste com "VPC and more", abrir a aba "Resource Map" da VPC criada. Capturar a tela mostrando o diagrama visual conectando VPC, subnets, route tables e Internet Gateway.
+
+`[CUSTO]` A VPC de teste em si não gera custo (sem NAT Gateway, nada aqui é cobrado). Confirme a exclusão completa antes de seguir, para não deixar uma segunda VPC solta na conta.
+
+### Contribuição ao projeto integrador
+
+Esta é a base física de todo o TrilhaShop dali em diante — vale fazer com calma. Usando o mesmo assistente **"VPC and more"**, desta vez para valer:
+
+![Assistente "VPC and more" configurado com o bloco 10.0.0.0/16, 2 Availability Zones, 2 subnets públicas e 2 privadas, e a opção de NAT Gateway "1 per AZ" marcada](screenshots/04-redes-e-entrega-de-conteudo/07-vpc-trilhashop-configuracao.png)
+> `[PRINT]` Passo a passo para capturar: "VPC" → "Create VPC" → "VPC and more". Preencher: nome do projeto `trilhashop`, bloco IPv4 `10.0.0.0/16`, "Number of Availability Zones" = 2 (selecionando `sa-east-1a` e `sa-east-1b`, as duas fixadas no documento de decisão do módulo 2), "Number of public subnets" = 2, "Number of private subnets" = 2, e em "NAT gateways" selecionar **"1 per AZ"** (para efeitos de custo controlado nesta trilha, um único NAT Gateway já seria suficiente — mas "1 per AZ" é o padrão recomendado em produção real, e vale ver a opção). Capturar a tela com toda a configuração preenchida antes de criar. Se quiser reduzir custo, é possível voltar depois e excluir um dos dois NAT Gateways, mantendo só um.
+
+Ao concluir, a AWS cria de uma vez: a VPC `trilhashop-vpc`, quatro subnets (`trilhashop-subnet-public1-sa-east-1a`, `-public2-sa-east-1b`, `-private1-sa-east-1a`, `-private2-sa-east-1b`), um Internet Gateway já anexado, um ou dois NAT Gateways, e as route tables já associadas corretamente (públicas apontando para o IGW, privadas apontando para o NAT Gateway) — o mesmo padrão que a prática isolada acima já mostrou em miniatura, agora na escala real do projeto.
+
+O último passo deste módulo é criar os três Security Groups que vão proteger as três camadas do TrilhaShop, já antecipando os módulos 6, 9, 10 e 13:
+
+![Três Security Groups criados: trilhashop-web-sg, trilhashop-app-sg e trilhashop-db-sg, listados no console da VPC](screenshots/04-redes-e-entrega-de-conteudo/08-security-groups-tres-camadas.png)
+> `[PRINT]` Passo a passo para capturar: "Security Groups" → "Create security group", três vezes, sempre associados à `trilhashop-vpc`:
+> - `trilhashop-web-sg`: regra de entrada permitindo HTTP (80) e HTTPS (443) de `0.0.0.0/0` — é a camada que o Load Balancer do módulo 6 vai usar.
+> - `trilhashop-app-sg`: regra de entrada permitindo a porta da aplicação (por exemplo, 8080) apenas com origem = `trilhashop-web-sg` (não um IP, o próprio Security Group como origem — o Console permite isso) — é a camada do EC2/containers dos módulos 9 e 10.
+> - `trilhashop-db-sg`: regra de entrada permitindo a porta do banco (5432 para PostgreSQL) apenas com origem = `trilhashop-app-sg` — é a camada do RDS do módulo 13.
+> Capturar a tela com os três grupos listados lado a lado.
+
+Essa cadeia — internet só fala com `web-sg`, `web-sg` só fala com `app-sg`, `app-sg` só fala com `db-sg` — é o princípio do menor privilégio (módulo 3) aplicado à rede: nenhuma camada tem acesso direto a uma camada que não seja a imediatamente anterior.
+
+`[CUSTO]` A partir daqui, o TrilhaShop tem seu primeiro recurso que cobra por hora: o(s) NAT Gateway(s). Ver a tabela de pausa em `00_indice.md` — excluir o NAT Gateway entre sessões de estudo mais longas é o passo de manutenção mais importante desta trilha a partir de agora. VPC, subnets, route tables, Internet Gateway e Security Groups não custam nada parados.
+
 ## Erros comuns nesta fase
 
 O erro mais comum é confundir Security Group com NACL, especialmente o detalhe de "stateful vs. stateless" — lembre que Security Group "lembra" da conexão (você não precisa liberar a resposta manualmente) e NACL não. O segundo erro é achar que uma subnet é pública ou privada por alguma marcação especial nela mesma; na verdade é sempre a tabela de rotas associada que decide isso, e essa tabela pode, tecnicamente, ser trocada depois — o que muda o comportamento da subnet sem precisar recriá-la.
@@ -111,3 +146,5 @@ Você está pronto para o módulo 05 quando consegue, sem consultar:
 - [ ] Explicar o que é uma CDN e por que o CloudFront usa Edge Locations para isso.
 - [ ] Diferenciar VPN de Direct Connect em velocidade de contratação, previsibilidade e custo.
 - [ ] Ter visto, no Console real, a VPC padrão e suas subnets, uma route table, um Security Group e uma NACL lado a lado, e os assistentes de Route 53 e CloudFront.
+- [ ] Ter calculado sub-redes `/24` a partir de um bloco `/16` de cabeça, sem calculadora de CIDR.
+- [ ] Ter criado, de verdade, a VPC `trilhashop-vpc` com subnets públicas/privadas em 2 AZs e os três Security Groups em cadeia (web → app → db).

@@ -65,6 +65,55 @@ O motivo de este módulo existir foi justamente uma pergunta legítima levantada
 
 `[APROFUNDAMENTO]` Se, depois de terminar esta trilha e passar no Cloud Practitioner, você quiser seguir especificamente para IA, o caminho natural é estudar diretamente para o AIF-C01, usando a mesma lógica desta trilha (ementa oficial do exame, laboratórios práticos, apostila por módulo) — mas isso seria uma trilha nova e separada, não uma extensão desta.
 
+## Práticas
+
+### Prática isolada
+
+As demonstrações do Rekognition e do Comprehend feitas acima já são a prática isolada deste módulo. Vale um passo a mais no Comprehend: rode a análise de sentimento duas vezes, uma com um texto claramente positivo ("Produto excelente, chegou antes do prazo, super recomendo!") e outra com um claramente negativo ("Péssima experiência, produto veio quebrado e o suporte não respondeu"). Compare os dois resultados de sentimento e os scores de confiança — é a melhor forma de ver como o serviço reage a sinais opostos, sem precisar entender nada do modelo por trás.
+
+### Contribuição ao projeto integrador
+
+O TrilhaShop ganha sua primeira função de IA real: moderação automática de imagens de produto, disparada assim que alguém envia uma foto para o bucket `trilhashop-product-images` (módulo 12).
+
+Primeiro, adicione à `trilhashop-lambda-role` (módulo 3, já usada no módulo 14) a permissão para chamar o Rekognition e ler do bucket de imagens:
+
+![Política inline adicional na trilhashop-lambda-role, concedendo rekognition:DetectModerationLabels e s3:GetObject no bucket trilhashop-product-images](screenshots/15-ia-e-machine-learning-na-aws/04-iam-role-lambda-policy-rekognition.png)
+> `[PRINT]` Passo a passo para capturar: "IAM" → "Roles" → `trilhashop-lambda-role` → "Add permissions" → "Create inline policy" → JSON. Conceder `rekognition:DetectModerationLabels` (sem restrição de recurso, já que o Rekognition não usa ARNs de recurso para essa ação) e `s3:GetObject` restrito a `arn:aws:s3:::trilhashop-product-images/*`. Nomear como `trilhashop-lambda-rekognition-moderacao`. Capturar antes de salvar.
+
+Crie a função `trilhashop-moderacao-imagens`, usando a `trilhashop-lambda-role`:
+
+```python
+import boto3
+
+rekognition = boto3.client("rekognition")
+
+def lambda_handler(event, context):
+    registro = event["Records"][0]["s3"]
+    bucket = registro["bucket"]["name"]
+    chave = registro["object"]["key"]
+
+    resposta = rekognition.detect_moderation_labels(
+        Image={"S3Object": {"Bucket": bucket, "Name": chave}}
+    )
+
+    labels = resposta.get("ModerationLabels", [])
+    if labels:
+        print(f"IMAGEM SINALIZADA: {chave} -- {[l['Name'] for l in labels]}")
+    else:
+        print(f"Imagem aprovada: {chave}")
+
+    return {"labels": labels}
+```
+
+Configure o **trigger** dessa função como um evento do próprio bucket `trilhashop-product-images`, para o tipo de evento "PUT" (novo objeto criado):
+
+![Configuração de notificação de evento do S3 no bucket trilhashop-product-images, apontando para a função trilhashop-moderacao-imagens em todo evento de criação de objeto](screenshots/15-ia-e-machine-learning-na-aws/05-s3-trigger-lambda-moderacao.png)
+> `[PRINT]` Passo a passo para capturar: dentro da função Lambda, "Add trigger" → S3 → bucket `trilhashop-product-images` → tipo de evento "All object create events". Capturar a tela antes de confirmar. Como alternativa, o mesmo trigger pode ser configurado a partir do próprio Console do S3, em "Properties" → "Event notifications".
+
+Teste enviando uma imagem qualquer para o bucket (pelo Console do S3, como no módulo 12) e depois consulte os logs da função no CloudWatch (módulo 6/14) — a linha "Imagem aprovada" ou "IMAGEM SINALIZADA" deve aparecer, confirmando que o upload disparou a função e a função chamou o Rekognition de verdade, sem nenhuma intervenção manual depois do upload.
+
+`[CUSTO]` Rekognition tem Free Tier de 5.000 imagens processadas por mês nos primeiros 12 meses da conta — poucos testes ficam bem dentro disso. A função Lambda e o trigger de S3 não têm custo por existirem parados, só por execução. Nada a pausar aqui.
+
 ## Erros comuns nesta fase
 
 O erro mais comum é tentar ir fundo demais neste módulo — estudar arquitetura de redes neurais, comparar hiperparâmetros de treinamento, ou se aprofundar em prompt engineering — quando o exame exige, para este tópico específico, apenas reconhecimento de catálogo. Esse esforço extra não é perdido, mas pertence à trilha do AI Practitioner, não a esta. O segundo erro é confundir Rekognition/Comprehend/Textract (serviços pré-treinados, uso direto via API) com SageMaker (plataforma para treinar modelos próprios) — são categorias diferentes dentro do mesmo domínio de IA/ML.
@@ -96,3 +145,5 @@ Você está pronto para o módulo 16 quando consegue, sem consultar:
 - [ ] Explicar o que é um modelo de fundação e o papel do Bedrock em relação a ele.
 - [ ] Explicar por que *agentic AI* e IA generativa em profundidade pertencem à AWS Certified AI Practitioner, não a esta trilha.
 - [ ] Ter testado, no Console real, ao menos uma demonstração do Rekognition e uma do Comprehend.
+- [ ] Ter comparado sentimento positivo vs. negativo no Comprehend.
+- [ ] Ter criado a função real `trilhashop-moderacao-imagens`, disparada por upload no bucket, e confirmado a execução nos logs do CloudWatch.

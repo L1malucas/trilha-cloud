@@ -64,6 +64,35 @@ A Task Statement 3.2 do domínio 3 lista quatro motivos para usar múltiplas reg
 
 `[APROFUNDAMENTO]` Desenhar e implementar de fato qualquer uma dessas quatro estratégias de DR — decidir exatamente quais componentes replicar, com qual frequência, e automatizar o processo de failover completo entre regiões — é trabalho de nível Solutions Architect Associate e além. Para o Cloud Practitioner, o que importa é reconhecer as quatro estratégias pelo nome, pela ordem de custo/RTO/RPO, e escolher a mais adequada dado um cenário descrito.
 
+## Práticas
+
+### Prática isolada
+
+Um exercício escrito, sem Console: para cada um dos três cenários abaixo, recomende uma das quatro estratégias de disaster recovery e justifique em duas ou três frases, citando o RTO/RPO aproximado esperado.
+
+1. Uma ferramenta interna de RH, usada só em horário comercial, com orçamento de infraestrutura apertado — uma indisponibilidade de um dia inteiro seria inconveniente, mas não catastrófica.
+2. Um sistema de emissão de boletos de uma fintech de médio porte — indisponibilidade de mais de uma hora gera multas contratuais e perda de confiança de clientes.
+3. A plataforma de negociação de uma bolsa de valores — qualquer segundo de indisponibilidade é inaceitável, e o orçamento de infraestrutura não é a principal restrição.
+
+Depois de responder, confira sua lógica contra a tabela do módulo: cenário 1 aponta para backup and restore; cenário 2, para pilot light ou warm standby (a diferença de orçamento entre os dois decide qual); cenário 3, para multi-site active-active. O valor do exercício está em explicar o "porquê", não só acertar o nome da estratégia.
+
+### Contribuição ao projeto integrador
+
+O TrilhaShop ganha uma **hosted zone** própria e um **health check** real monitorando o `trilhashop-alb` — o primeiro passo de DNS consciente de disponibilidade para o projeto.
+
+![Console do Route 53 criando a hosted zone trilhashop.click, do tipo pública](screenshots/11-projetando-para-uptime-network/05-route53-hosted-zone-trilhashop.png)
+> `[PRINT]` Passo a passo para capturar: "Route 53" → "Hosted zones" → "Create hosted zone". Nome: `trilhashop.click` (um domínio de exemplo, propositalmente **não registrado** — esta hosted zone existe só para fins de prática desta trilha, e não vai resolver publicamente na internet sem um domínio de verdade registrado e delegado a ela). Tipo: "Public hosted zone". Capturar a tela antes de criar.
+
+![Health check do Route 53 configurado monitorando o endpoint HTTP do trilhashop-alb](screenshots/11-projetando-para-uptime-network/06-route53-health-check-alb.png)
+> `[PRINT]` Passo a passo para capturar: "Route 53" → "Health checks" → "Create health check". Tipo: "Endpoint". Protocolo HTTP, e o domínio/IP do DNS name do `trilhashop-alb` (módulo 6). Capturar a tela preenchida antes de criar. Aguardar alguns minutos até o status mostrar "Healthy".
+
+Com a hosted zone e o health check prontos, crie um registro com política de roteamento **Failover**, primário apontando para o `trilhashop-alb` (como alias, com "Evaluate target health" habilitado) e secundário apontando para `203.0.113.10` — um endereço do bloco `203.0.113.0/24`, reservado pela IANA especificamente para documentação e exemplos, usado aqui de propósito como placeholder: o TrilhaShop ainda não tem um segundo destino real para failover (isso muda no módulo 16, quando o site estático em S3 puder assumir esse papel).
+
+![Registro DNS do Route 53 com política Failover, mostrando o registro primário (alias para o ALB) e o secundário (placeholder)](screenshots/11-projetando-para-uptime-network/07-route53-registro-failover.png)
+> `[PRINT]` Passo a passo para capturar: dentro da hosted zone, "Create record". Nome: `www`. Routing policy: "Failover". Criar o registro primário como alias para o `trilhashop-alb`, associado ao health check criado acima. Criar um segundo registro, mesmo nome, Failover record type "Secondary", apontando para `203.0.113.10`. Capturar a tela com os dois registros lado a lado na listagem da hosted zone.
+
+`[CUSTO]` Diferente do NAT Gateway e do ALB (cobrança por hora), a hosted zone e o health check do Route 53 cobram **um valor fixo mensal** — pausar entre sessões não reduz esse custo, porque ele não é proporcional ao tempo de uso dentro do mês. Se for parar de estudar por um período longo, a forma de evitar a cobrança é excluir a hosted zone e o health check (recriar depois leva menos de um minuto). Para sessões normais de estudo, é seguro deixá-los criados.
+
 ## Erros comuns nesta fase
 
 O erro mais comum é achar que "mais caro é sempre melhor" nas estratégias de DR — a escolha correta depende do impacto real de negócio de uma indisponibilidade, não de maximizar redundância indiscriminadamente; multi-site para um sistema interno de baixo impacto seria desperdício de orçamento, não boa prática. O segundo erro é confundir RTO com RPO: RTO é sobre **tempo até voltar a funcionar**; RPO é sobre **quanto dado é aceitável perder**, medido também em unidade de tempo (por exemplo, "RPO de 1 hora" significa que, na pior hipótese, dados dos últimos 60 minutos antes do desastre podem ser perdidos).
@@ -94,3 +123,5 @@ Você está pronto para o módulo 12 quando consegue, sem consultar:
 - [ ] Diferenciar RTO de RPO com uma frase para cada.
 - [ ] Listar os quatro motivos para usar múltiplas regiões (disaster recovery, continuidade de negócio, baixa latência, soberania de dados).
 - [ ] Ter visto, no Console real, a configuração de health check de um target group e de um health check do Route 53.
+- [ ] Ter recomendado e justificado por escrito uma estratégia de DR para os três cenários da prática isolada.
+- [ ] Ter criado a hosted zone `trilhashop.click`, o health check no ALB e o registro de failover primário/secundário reais.

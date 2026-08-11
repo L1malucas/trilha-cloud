@@ -110,6 +110,22 @@ Toda decisão de arquitetura em nuvem envolve trade-offs. Para dar um vocabulár
 
 > `[TEORIA]` Para a prova: os seis pilares são excelência operacional, segurança, confiabilidade, eficiência de performance, otimização de custos e sustentabilidade. Vale decorar os seis nomes agora — o módulo 5 explica o que cada um significa na prática.
 
+## Práticas
+
+### Prática isolada
+
+Volte à AWS Pricing Calculator e monte duas estimativas separadas: uma instância `t3.small` On-Demand rodando 24 horas por dia durante 3 anos, e a mesma instância num compromisso equivalente de Reserved Instance de 3 anos (a calculadora tem essa opção no mesmo fluxo). Anote os dois valores totais. Depois, pesquise rapidamente (num site de e-commerce qualquer) o preço aproximado de um mini servidor físico com capacidade parecida (poucos núcleos, poucos GB de RAM). Feito isso, escreva um parágrafo curto — pode ser num arquivo de texto local, não faz parte da trilha — respondendo: para uma startup testando uma ideia nova, qual das três opções faz mais sentido, e por quê? E para uma empresa que sabe, com certeza, que vai rodar essa carga pelos próximos 3 anos sem parar? O objetivo não é chegar numa resposta "certa" única, é praticar o raciocínio de CAPEX vs. OPEX vs. compromisso de longo prazo com números reais na frente, não só com a teoria.
+
+### Contribuição ao projeto integrador
+
+O TrilhaShop começa aqui, mas ainda sem nenhum recurso AWS — o primeiro passo de qualquer projeto real é a decisão de modelo, não o clique no Console. Registre (num arquivo de texto simples, local, fora da trilha) três decisões, que os módulos seguintes vão assumir como já tomadas:
+
+1. **Modelo de implantação**: nuvem pública (é o que esta trilha usa do início ao fim).
+2. **Mix de modelo de serviço**: o catálogo de produtos vai rodar em IaaS (EC2, módulo 9) atrás de um Load Balancer (módulo 6); o carrinho vai rodar em containers (módulo 10); os pedidos vão rodar em serverless/FaaS (Lambda, módulo 14). Um projeto real raramente é 100% de um modelo só — este documento é o primeiro registro dessa mistura deliberada.
+3. **Critério de sucesso da conta**: o TrilhaShop inteiro precisa caber dentro do Free Tier na maior parte do tempo, com os poucos recursos pagos (NAT Gateway, ALB, RDS) pausados entre sessões de estudo, seguindo a tabela em `00_indice.md`.
+
+Esse documento de decisão não é um recurso da AWS — é o contrato que os módulos 3 a 16 vão cumprir, um de cada vez.
+
 ## Erros comuns nesta fase
 
 Vale nomear diretamente os dois deslizes mais frequentes de quem está começando: tratar "nuvem" como sinônimo vago de "internet" ou "terceirização", sem entender o mecanismo de elasticidade e pagamento por uso que a define tecnicamente; e misturar os eixos de modelo de implantação com modelo de serviço, como se fossem a mesma pergunta. Os dois pontos aparecem marcados como `[TEORIA]` acima justamente porque aparecem com frequência desproporcional nas provas oficiais.
@@ -144,3 +160,5 @@ Você está pronto para o módulo 02 quando consegue, sem consultar:
 - [ ] Listar e explicar os três modelos de serviço (IaaS, PaaS, SaaS) em termos de qual camada da pilha técnica cada um abstrai.
 - [ ] Nomear os seis pilares do Well-Architected Framework, mesmo sem aprofundar em nenhum ainda.
 - [ ] Ter navegado, no Console real, pelo Billing and Cost Management, pela AWS Pricing Calculator, pelo Free Tier dashboard e pelo Well-Architected Tool.
+- [ ] Ter feito a comparação On-Demand vs. Reserved vs. servidor físico da prática isolada.
+- [ ] Ter registrado o documento de decisão do TrilhaShop (modelo de implantação, mix de serviço, critério de sucesso).

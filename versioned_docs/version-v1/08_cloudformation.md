@@ -87,11 +87,89 @@ Vale uma palavra sobre o Terraform, já que ele aparece explicitamente no curso 
 
 `[APROFUNDAMENTO]` Não é conteúdo do Cloud Practitioner comparar sintaxe ou decidir entre os dois em profundidade — isso é uma decisão de arquitetura de nível mais avançado. Para a prova, basta reconhecer CloudFormation como a ferramenta nativa de IaC da AWS.
 
-## Limpando o laboratório
+## Práticas
 
-Excluir uma stack remove, por padrão, todos os recursos que ela criou — é a contrapartida exata da criação, e é por isso que CloudFormation é também uma ferramenta de limpeza confiável: você não precisa lembrar manualmente de cada recurso individual criado, só precisa excluir a stack.
+### Prática isolada
 
-`[CUSTO]` Um bucket S3 vazio, dentro do Free Tier, não gera custo relevante — mas é boa prática de qualquer forma excluir a stack ao final deste laboratório. No Console do CloudFormation, selecione a stack criada e clique em "Delete". Se o bucket já tiver algum objeto dentro dele, a exclusão pode falhar até que o bucket seja esvaziado manualmente primeiro — esse é, inclusive, um comportamento de segurança proposital do CloudFormation para S3, evitando perda de dados por exclusão acidental.
+Antes de limpar a stack do bucket criada mais acima, dê um passo a mais nela: edite o template, adicionando uma tag ao bucket —
+
+```yaml
+Resources:
+  BucketDeExemplo:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref NomeDoBucket
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Ambiente
+          Value: laboratorio-modulo-08
+```
+
+Envie essa alteração para a mesma stack já criada usando um **change set** (na tela da stack, "Stack actions" → "Create change set for current stack"), e leia o preview antes de executar — confirme que ele descreve uma **modificação** do bucket existente, não uma substituição. Execute o change set e confirme, na aba "Resources", que a tag foi aplicada.
+
+Feito isso, excluir a stack remove, por padrão, todos os recursos que ela criou — é a contrapartida exata da criação, e é por isso que CloudFormation é também uma ferramenta de limpeza confiável: você não precisa lembrar manualmente de cada recurso individual criado, só precisa excluir a stack.
+
+`[CUSTO]` Um bucket S3 vazio, dentro do Free Tier, não gera custo relevante — mas é boa prática de qualquer forma excluir a stack ao final desta prática isolada. No Console do CloudFormation, selecione a stack criada e clique em "Delete". Se o bucket já tiver algum objeto dentro dele, a exclusão pode falhar até que o bucket seja esvaziado manualmente primeiro — esse é, inclusive, um comportamento de segurança proposital do CloudFormation para S3, evitando perda de dados por exclusão acidental.
+
+### Contribuição ao projeto integrador
+
+O TrilhaShop já tem uma VPC criada manualmente no módulo 4 — a peça de IaC que este módulo contribui não é recriar a mesma VPC (isso geraria conflito), é **codificar essa mesma topologia num template** e usá-lo para subir um **ambiente de staging** paralelo, com os mesmos princípios de rede em um bloco CIDR diferente:
+
+```yaml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Ambiente de staging do TrilhaShop, espelhando a VPC de producao do modulo 04
+
+Resources:
+  StagingVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.1.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: trilhashop-staging-vpc
+
+  StagingSubnetPublica:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref StagingVpc
+      CidrBlock: 10.1.0.0/24
+      AvailabilityZone: sa-east-1a
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: trilhashop-staging-subnet-public
+
+  StagingIgw:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: trilhashop-staging-igw
+
+  StagingIgwAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref StagingVpc
+      InternetGatewayId: !Ref StagingIgw
+
+Outputs:
+  VpcId:
+    Value: !Ref StagingVpc
+  SubnetId:
+    Value: !Ref StagingSubnetPublica
+```
+
+Este template é deliberadamente mais simples que a VPC de produção do módulo 4 (uma AZ só, uma subnet pública, sem NAT Gateway) — staging, nesta trilha, existe para testar mudanças de template com segurança, não para replicar produção 1:1 com o mesmo custo.
+
+![Stack trilhashop-staging criada no CloudFormation, com a aba Resources mostrando VPC, Subnet, Internet Gateway e o attachment, todos com status CREATE_COMPLETE](screenshots/08-cloudformation/04-stack-staging-trilhashop.png)
+> `[PRINT]` Passo a passo para capturar: criar a stack `trilhashop-staging` com o template acima, do mesmo jeito que a stack de exemplo foi criada mais acima neste módulo. Capturar a aba "Resources" com os quatro recursos em `CREATE_COMPLETE`.
+
+Esse padrão — codificar a infraestrutura que existia só manualmente, e usá-la para gerar um segundo ambiente — é exatamente o argumento de negócio por trás de Infrastructure as Code que a abertura deste módulo levantou, agora aplicado ao próprio TrilhaShop.
+
+`[CUSTO]` A `trilhashop-staging-vpc` (sem NAT Gateway) não gera custo por hora — só existe o Internet Gateway, que é gratuito. Pode ficar criada indefinidamente sem preocupação, ou ser excluída (`Delete` na stack) quando não precisar mais dela — recriar depois é um clique.
 
 ## Erros comuns nesta fase
 
@@ -123,3 +201,5 @@ Você está pronto para o módulo 09 quando consegue, sem consultar:
 - [ ] Explicar o que um change set mostra e por que ele é útil antes de aplicar uma atualização.
 - [ ] Explicar o que é drift e como ele acontece.
 - [ ] Ter criado e excluído, no Console real, uma stack CloudFormation completa.
+- [ ] Ter aplicado uma mudança via change set numa stack já existente, e confirmado que o preview mostrava "modificação", não "substituição".
+- [ ] Ter criado a stack real `trilhashop-staging` com a VPC de staging do TrilhaShop.

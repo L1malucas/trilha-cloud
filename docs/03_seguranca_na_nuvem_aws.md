@@ -92,6 +92,55 @@ Empresas em setores regulados frequentemente precisam comprovar, para auditores 
 ![Console do AWS Artifact mostrando a aba de relatórios (reports) com a lista de certificações e relatórios de conformidade disponíveis para download](screenshots/03-seguranca-na-nuvem-aws/06-artifact-relatorios.png)
 > `[PRINT]` Passo a passo para capturar: no Console, buscar "Artifact" e abrir o serviço. Clicar na aba "Reports" (Relatórios). Capturar a tela mostrando a lista de relatórios de conformidade disponíveis (ISO, SOC, PCI, entre outros), sem necessidade de baixar nenhum.
 
+## Práticas
+
+### Prática isolada
+
+O cenário: um estagiário de marketing precisa conseguir ver as imagens de produto armazenadas num bucket S3 específico (`trilhashop-product-images`, o mesmo que o módulo 12 vai criar de verdade), mas não deve conseguir apagar, sobrescrever, nem ver nenhum outro bucket da conta. Escreva do zero uma política JSON que concede exatamente isso — nem mais, nem menos:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "SomenteLeituraDeUmBucketEspecifico",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::trilhashop-product-images",
+        "arn:aws:s3:::trilhashop-product-images/*"
+      ]
+    }
+  ]
+}
+```
+
+![Editor de política JSON do IAM com a política de leitura restrita colada, antes de salvar](screenshots/03-seguranca-na-nuvem-aws/07-policy-leitura-restrita.png)
+> `[PRINT]` Passo a passo para capturar: no IAM, "Policies" → "Create policy" → aba "JSON", colar a política acima (ajustando o nome do bucket se necessário). Capturar a tela com o JSON visível no editor antes de salvar. Nomear a política como `trilhashop-leitura-imagens-produto` ao salvar.
+
+Crie um usuário de teste descartável (`teste-estagiario`, sem console access, só para este exercício), anexe essa política a ele, e use o **IAM Policy Simulator** (ou tente de fato, se já tiver um bucket de teste qualquer) para confirmar que uma ação como `s3:DeleteObject` é negada e `s3:GetObject` é permitida. Ao terminar, exclua o usuário de teste e a política — este exercício não deixa nada persistente.
+
+`[ATENÇÃO]` Um erro comum ao escrever policies do zero é esquecer o segundo ARN (`.../*`) — sem ele, `s3:ListBucket` funciona mas `s3:GetObject` falha, porque um se aplica ao bucket como recurso e o outro aos objetos dentro dele. É uma pegadinha frequente tanto na prova quanto no uso real.
+
+### Contribuição ao projeto integrador
+
+Aqui nasce a identidade real do TrilhaShop dentro do IAM — grupo, usuário de operação e duas roles que os módulos seguintes vão assumir como já existentes.
+
+![Console do IAM mostrando a criação do grupo trilhashop-operadores, na etapa de nomear o grupo](screenshots/03-seguranca-na-nuvem-aws/08-iam-criar-grupo-trilhashop.png)
+> `[PRINT]` Passo a passo para capturar: no IAM, "User groups" → "Create group". Nomear como `trilhashop-operadores`. Capturar a tela antes de concluir. Concluir a criação (sem anexar nenhuma policy ampla — este grupo existe para você adicionar usuários de projeto conforme precisar, com policies específicas, seguindo o mesmo princípio de menor privilégio da prática isolada acima).
+
+Mais importante que o grupo são as duas **roles de serviço** que o TrilhaShop vai precisar — roles, não usuários, porque quem vai assumi-las são serviços da AWS, não pessoas:
+
+![Console do IAM na criação de uma role, com "AWS service" selecionado como tipo de entidade confiável e EC2 escolhido como caso de uso](screenshots/03-seguranca-na-nuvem-aws/09-iam-criar-role-ec2.png)
+> `[PRINT]` Passo a passo para capturar: no IAM, "Roles" → "Create role". Selecionar "AWS service" como trusted entity type, e "EC2" como use case. Nomear como `trilhashop-ec2-role`. Não anexar nenhuma policy ainda (o módulo 9, quando as instâncias reais forem lançadas, volta aqui para anexar exatamente a permissão que elas precisarem — por exemplo, acesso de leitura ao bucket de imagens). Concluir a criação.
+
+Repita o mesmo processo criando uma segunda role, `trilhashop-lambda-role`, desta vez com "Lambda" como use case — ela vai ser assumida pela função de pedidos do módulo 14 e pela função de IA do módulo 15. Nenhuma dessas duas roles gera custo por existir — IAM é gratuito — então elas podem ficar criadas, vazias de permissão, até o módulo que efetivamente precisar delas.
+
+`[CUSTO]` Nada neste módulo gera cobrança: usuários, grupos, roles e policies do IAM não têm custo. Se precisar pausar o projeto por um tempo, não há nada a fazer aqui — ver a tabela de pausa em `00_indice.md`.
+
 ## Erros comuns nesta fase
 
 O deslize mais caro deste módulo é presumir que, por a AWS ser responsável pela "segurança da nuvem", isso cobre configurações que na verdade são suas — um bucket S3 configurado como público por engano, uma política IAM excessivamente permissiva, uma instância sem patch de segurança aplicado, todos esses são incidentes causados pelo lado do cliente na responsabilidade compartilhada, não falhas da AWS. O segundo erro comum é usar o usuário root no dia a dia por comodidade, expondo a identidade mais privilegiada da conta a um risco desnecessário toda vez que ela é usada.
@@ -127,3 +176,5 @@ Você está pronto para o módulo 04 quando consegue, sem consultar:
 - [ ] Nomear GuardDuty, Inspector, Macie e Security Hub e dizer, em uma frase, o que cada um faz.
 - [ ] Explicar o que são SCPs no AWS Organizations e por que elas são um "teto", não uma concessão de permissão.
 - [ ] Ter navegado, no Console real, pelo IAM (dashboard, editor de política, status de MFA), pelo KMS, pelo Security Hub e pelo AWS Artifact.
+- [ ] Ter escrito e testado a policy de leitura restrita da prática isolada, e excluído o usuário/policy de teste depois.
+- [ ] Ter criado, de verdade, o grupo `trilhashop-operadores` e as roles `trilhashop-ec2-role` e `trilhashop-lambda-role` (ainda sem permissões anexadas).

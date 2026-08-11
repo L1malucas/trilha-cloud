@@ -74,6 +74,56 @@ Uma Access Key é criada dentro do IAM, associada a um usuário específico, e f
 
 `[CUSTO]` Nenhuma ação deste módulo gera cobrança — CloudShell é gratuito para uso dentro de limites generosos de tempo e armazenamento por sessão, e os comandos `describe-*`/`get-caller-identity` são chamadas de leitura sem custo. O ponto de atenção fica, como sempre, para comandos que criam recursos (`aws ec2 run-instances`, por exemplo) — esses sim geram cobrança exatamente como se tivessem sido criados pelo Console.
 
+## Práticas
+
+### Prática isolada
+
+Um único comando já é útil; um script que encadeia vários é o que realmente separa CLI de Console. No CloudShell, escreva um pequeno script que lista todos os usuários IAM da conta e, para cada um, verifica se o MFA está ativado:
+
+```bash
+#!/bin/bash
+for user in $(aws iam list-users --query 'Users[].UserName' --output text); do
+  mfa_count=$(aws iam list-mfa-devices --user-name "$user" --query 'length(MFADevices)' --output text)
+  if [ "$mfa_count" -eq 0 ]; then
+    echo "SEM MFA: $user"
+  else
+    echo "OK: $user"
+  fi
+done
+```
+
+Salve como `auditoria-mfa.sh`, rode com `bash auditoria-mfa.sh`, e confirme que ele lista corretamente o usuário administrativo criado na preparação da conta (módulo 0) e o usuário de teste do módulo 3, se ainda existir. Esse é o tipo de script que uma auditoria de segurança real rodaria periodicamente — pequeno, mas exatamente a diferença entre "eu sei rodar um comando" e "eu sei automatizar uma verificação".
+
+### Contribuição ao projeto integrador
+
+Nenhum recurso novo — a contribuição deste módulo é operacional: escreva um script `trilhashop-status.sh` que consulta, de uma vez, o estado de tudo que o TrilhaShop já tem até aqui:
+
+```bash
+#!/bin/bash
+echo "--- VPC ---"
+aws ec2 describe-vpcs --filters "Name=tag:Name,Values=trilhashop-vpc" \
+  --query 'Vpcs[].{Id:VpcId,CIDR:CidrBlock,State:State}' --output table
+
+echo "--- Security Groups ---"
+aws ec2 describe-security-groups --filters "Name=group-name,Values=trilhashop-*" \
+  --query 'SecurityGroups[].{Nome:GroupName,Id:GroupId}' --output table
+
+echo "--- Load Balancer ---"
+aws elbv2 describe-load-balancers --names trilhashop-alb \
+  --query 'LoadBalancers[].{Estado:State.Code,DNS:DNSName}' --output table
+
+echo "--- Auto Scaling Group ---"
+aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names trilhashop-catalogo-asg \
+  --query 'AutoScalingGroups[].{Desejado:DesiredCapacity,Minimo:MinSize,Maximo:MaxSize}' --output table
+```
+
+![Terminal do CloudShell mostrando a saída do script trilhashop-status.sh, com as quatro seções (VPC, Security Groups, Load Balancer, Auto Scaling Group) preenchidas](screenshots/07-aws-cli-e-cloudshell/04-trilhashop-status-script.png)
+> `[PRINT]` Passo a passo para capturar: salvar o script acima no CloudShell (ele persiste entre sessões, associado à sua conta), rodar com `bash trilhashop-status.sh`, e capturar a tela com a saída completa das quatro seções.
+
+Esse script vai crescer nos próximos módulos — cada peça nova do TrilhaShop (RDS no módulo 13, Lambda no módulo 14) ganha sua própria seção nele. É um hábito de operação real: em vez de abrir seis telas diferentes do Console para saber "o que existe agora", um único comando responde.
+
+`[CUSTO]` Nenhuma ação deste módulo cria recurso — são todas chamadas de leitura. Nada a pausar aqui.
+
 ## Erros comuns nesta fase
 
 O erro mais comum de quem está começando com CLI é confundir a Secret Access Key com a senha do Console — são credenciais completamente diferentes, geradas e usadas em contextos distintos, e a Secret Access Key só é mostrada uma única vez no momento da criação (se perdida, é preciso gerar uma nova, não recuperar a antiga). O segundo erro é rodar comandos destrutivos (`delete-*`, `terminate-*`) sem antes rodar o `describe-*`/`list-*` correspondente para confirmar exatamente o que vai ser afetado — a CLI não pede confirmação visual como o Console frequentemente pede.
@@ -103,3 +153,5 @@ Você está pronto para o módulo 08 quando consegue, sem consultar:
 - [ ] Explicar o que o CloudShell oferece que a instalação local não oferece de imediato (nenhuma configuração de credencial necessária).
 - [ ] Diferenciar Access Key de senha de Console, e explicar por que Access Keys expostas são um risco de segurança sério.
 - [ ] Ter rodado, no CloudShell real, ao menos `aws sts get-caller-identity` e um comando `describe-*`.
+- [ ] Ter escrito e rodado o script de auditoria de MFA da prática isolada.
+- [ ] Ter salvo o script `trilhashop-status.sh` no CloudShell e confirmado que ele reporta corretamente o estado dos recursos criados até o módulo 6.

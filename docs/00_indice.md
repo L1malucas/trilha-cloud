@@ -26,7 +26,33 @@ A trilha termina no módulo 16 com um projeto que amarra tudo numa arquitetura s
 
 Leia os módulos em ordem. Diferente de uma trilha de especialização com ramificações, esta é linear: o módulo 4 assume que você entende o módulo 2, o módulo 13 assume o módulo 9, e assim por diante — cada apostila abre lembrando o que ela herda do módulo anterior e fecha apontando para onde o assunto continua. Pular módulo aqui costuma custar caro lá na frente, porque a AWS é uma disciplina em que os serviços se combinam (uma decisão de banco de dados no módulo 13 só faz sentido se você já entendeu VPC no módulo 4).
 
-Cada módulo tem, embutido no texto corrido, um roteiro de laboratório prático — a ideia é que você tenha uma conta AWS aberta ao lado enquanto lê, e execute os passos conforme chega neles, não que leia tudo primeiro e pratique depois. Fazer o laboratório é o que transforma "eu li sobre S3" em "eu sei o que acontece quando marco um bucket como público sem querer".
+Cada módulo termina com uma seção **Práticas**, dividida em duas partes que servem propósitos diferentes. A **prática isolada** é um exercício autocontido daquele módulo especificamente — cria (quando aplicável) e destrói dentro do próprio módulo, sem deixar nada pendente. A **contribuição ao projeto integrador** é uma peça real e permanente de um projeto único, o **TrilhaShop**, construído aos poucos ao longo dos módulos 3 a 15 — não uma metáfora, um recurso de verdade, que o módulo seguinte reaproveita. A ideia é que você tenha uma conta AWS aberta ao lado enquanto lê, e execute os passos conforme chega neles, não que leia tudo primeiro e pratique depois.
+
+---
+
+## O projeto integrador: TrilhaShop
+
+A partir do módulo 3, esta trilha constrói, em paralelo à teoria, uma loja virtual fictícia chamada **TrilhaShop** — não como narrativa, como infraestrutura real que cresce módulo a módulo: o IAM do módulo 3 protege a VPC do módulo 4; o ALB e o Auto Scaling Group do módulo 6 rodam dentro dessa VPC; o EC2 do módulo 9 é o que o ASG efetivamente gerencia; o container do módulo 10 é um segundo serviço na mesma rede; o RDS e o DynamoDB do módulo 13 são os bancos que a API do módulo 14 usa; e assim por diante, até o módulo 16 amarrar tudo numa arquitetura só e desmontar o que foi construído.
+
+Essa escolha — construir de verdade, não só descrever — tem uma consequência que precisa ficar explícita desde já: alguns dos recursos que o TrilhaShop usa **cobram por hora enquanto existem**, independentemente de você estar estudando naquele momento ou não. Se você leva semanas ou meses para terminar a trilha, precisa pausar esses recursos entre uma sessão de estudo e outra — não é opcional, é parte do próprio aprendizado de operar AWS com responsabilidade financeira.
+
+### Pausando o projeto integrador entre sessões de estudo
+
+| Recurso | Cobra parado/ocioso? | O que fazer entre sessões |
+|---|---|---|
+| NAT Gateway (módulo 4) | Sim, por hora, mesmo sem tráfego | Excluir ao final da sessão; recriar (leva poucos minutos) quando for testar conectividade privada de novo |
+| Application Load Balancer (módulo 6) | Sim, por hora | Não existe "pausar" um ALB — excluir e recriar quando for retomar essa parte |
+| Auto Scaling Group / instâncias EC2 (módulos 6, 9) | As instâncias sim, o ASG em si não | Reduzir `desired capacity` para 0 (o ASG encerra as instâncias sozinho); ou `stop` direto nas instâncias se não usar ASG |
+| RDS (módulo 13) | Sim, por hora | `Stop` a instância — atenção: a AWS reinicia automaticamente uma instância RDS parada depois de 7 dias, então em pausas mais longas é preciso parar de novo |
+| ECS/Fargate — task/service (módulo 10) | Sim, enquanto a task roda | Reduzir o `desired count` do service para 0, ou parar a task diretamente |
+| Route 53 — hosted zone e health check (módulo 11) | Sim, mas **valor fixo mensal**, não por hora — pausar não ajuda | Só reduz custo se excluído e recriado depois (leva menos de um minuto) |
+| VPC, subnets, route tables, Security Groups (módulo 4) | Não | Deixar como está |
+| Tabelas DynamoDB em modo on-demand (módulo 13) | Não, cobra só por uso real | Deixar como está |
+| Bucket S3 (módulo 12) | Não, cobra só pelo volume armazenado (baixo nesta escala) | Deixar como está |
+| Funções Lambda (módulo 14, 15) | Não, cobra só por invocação | Deixar como está |
+| Usuários, grupos, roles e policies do IAM (módulo 3) | Não | Deixar como está |
+
+Cada seção de "Contribuição ao projeto integrador", nos módulos seguintes, termina com uma lembrança curta apontando de volta para esta tabela — vale marcá-la para consulta rápida. O módulo 16 fecha a trilha com o roteiro completo de desmontagem de tudo, na ordem certa, para quem termina os estudos e não vai mais usar o TrilhaShop.
 
 ---
 

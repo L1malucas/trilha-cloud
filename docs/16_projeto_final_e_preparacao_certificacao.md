@@ -47,18 +47,76 @@ Além dos planos de suporte, a AWS mantém uma rede de recursos técnicos gratui
 
 `[APROFUNDAMENTO]` Diferenciar em detalhe os tiers de parceria da AWS (Select, Advanced, Premier) e os benefícios específicos de cada um foge do escopo do Cloud Practitioner — para a prova, basta reconhecer que a APN existe e o papel geral de um parceiro (implementação e consultoria complementares ao suporte direto da AWS).
 
-## `[LABORATÓRIO]` Projeto integrador: juntando o que a trilha já construiu
+## Práticas
 
-Ao longo desta trilha, você já criou, isoladamente, boa parte das peças de uma aplicação real: um bucket S3 (módulo 12), uma tabela DynamoDB (módulo 13), uma função Lambda exposta por URL (módulo 14). Este projeto final não pede recursos novos do zero — pede para você **conectar o que já existe** numa arquitetura coerente, a mesma tarefa que qualquer arquitetura real de produção enfrenta: não construir peças isoladas, mas fazê-las conversar.
+### Prática isolada
 
-A arquitetura de referência: um site estático (HTML simples) hospedado num bucket S3 (módulo 12), servido através de uma distribuição CloudFront (módulo 4) para aproveitar cache nas Edge Locations; esse site faz uma chamada JavaScript para a Function URL do Lambda (módulo 14); a função Lambda lê e escreve itens na tabela DynamoDB (módulo 13); e todo o acesso entre essas peças é protegido por políticas de IAM seguindo o princípio do menor privilégio (módulo 3), com CloudWatch (módulo 6) registrando as execuções.
+As explorações do AWS Budgets, do Cost Explorer e da comparação de planos de suporte, feitas acima, já são a prática isolada deste módulo — são ferramentas de conta, não peças do TrilhaShop, e não dependem de nada construído nos módulos anteriores.
 
-Os passos práticos: primeiro, ajuste o código da função Lambda do módulo 14 para, em vez de só retornar uma mensagem fixa, gravar um item na tabela DynamoDB do módulo 13 a cada chamada (um registro simples, como `{"id": "<timestamp>", "nome": "<nome recebido>"}`), usando o SDK `boto3` já disponível no runtime Python do Lambda por padrão. Segundo, crie um arquivo `index.html` simples com um formulário e uma chamada `fetch()` em JavaScript para a Function URL do módulo 14. Terceiro, envie esse `index.html` para o bucket S3 do módulo 12, e habilite hospedagem de site estático nas propriedades do bucket. Quarto, opcionalmente, crie uma distribuição CloudFront (módulo 4) apontando para esse bucket como origem, para servir o site através da malha de Edge Locations em vez de diretamente do S3.
+### Contribuição final ao projeto integrador: a vitrine que amarra tudo
 
-![Diagrama de arquitetura (desenhado à mão, no papel, ou numa ferramenta simples) representando o fluxo: usuário -> CloudFront -> S3 (site estático) e usuário -> Function URL do Lambda -> DynamoDB](screenshots/16-projeto-final-e-preparacao-certificacao/04-diagrama-arquitetura-projeto-final.png)
-> `[PRINT]` Este item não é uma captura do Console — é a única exceção da trilha. Desenhar (à mão ou numa ferramenta simples de diagramação) a arquitetura final montada, com as setas de fluxo entre CloudFront, S3, Lambda e DynamoDB, e salvar como imagem neste caminho. O objetivo é ter um artefato visual próprio do projeto, não uma tela do Console.
+Depois de quinze módulos, o TrilhaShop já tem quase todas as peças: rede (módulo 4), IAM (módulo 3), catálogo em EC2 atrás de um ALB (módulos 6 e 9), carrinho em containers (módulo 10), banco relacional e NoSQL (módulo 13), API de pedidos serverless (módulo 14), moderação de imagem por IA (módulo 15), DNS com failover (módulo 11), staging via IaC (módulo 8). A única peça que falta é a que o usuário final efetivamente vê: uma página estática servindo como vitrine, hospedada em S3 e distribuída por CloudFront, que chama a API de pedidos já construída.
 
-`[CUSTO]` Todos os componentes deste projeto (S3, uma distribuição CloudFront de baixo tráfego, uma função Lambda de poucas invocações, uma tabela DynamoDB pequena em modo on-demand) ficam dentro da camada gratuita da AWS para o volume de uso de um projeto de estudo. Ainda assim, ao concluir a trilha, revise o Billing and Cost Management (módulo 1) e o Cost Explorer (acima) uma última vez, e desmonte o que não pretende manter: exclua a distribuição CloudFront, esvazie e exclua o bucket S3, exclua a função Lambda e a tabela DynamoDB, seguindo os mesmos passos de limpeza já praticados em cada módulo original.
+Crie um `index.html` simples, com um catálogo estático de dois ou três produtos e um formulário de pedido que chama a API do módulo 14 via `fetch()`:
+
+```html
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><title>TrilhaShop</title></head>
+<body>
+  <h1>TrilhaShop</h1>
+  <form id="form-pedido">
+    <input name="produto" placeholder="Produto" required />
+    <input name="quantidade" type="number" value="1" min="1" required />
+    <button type="submit">Comprar</button>
+  </form>
+  <p id="resultado"></p>
+  <script>
+    document.getElementById("form-pedido").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const dados = Object.fromEntries(new FormData(e.target));
+      const resp = await fetch("https://<api-id>.execute-api.sa-east-1.amazonaws.com/pedidos", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(dados)
+      });
+      const json = await resp.json();
+      document.getElementById("resultado").textContent = `Pedido criado: ${json.idPedido}`;
+    });
+  </script>
+</body>
+</html>
+```
+
+Envie esse arquivo para um novo bucket `trilhashop-frontend` (não o `trilhashop-product-images` do módulo 12, que continua com acesso bloqueado — esse novo bucket é público, propositalmente, porque é a vitrine), habilite hospedagem de site estático nas propriedades do bucket, e crie uma distribuição CloudFront apontando para ele como origem (o mesmo assistente já visto no módulo 4).
+
+![Distribuição CloudFront concluída, com o bucket trilhashop-frontend como origem e o domínio de distribuição gerado (*.cloudfront.net)](screenshots/16-projeto-final-e-preparacao-certificacao/04-cloudfront-trilhashop-frontend.png)
+> `[PRINT]` Passo a passo para capturar: depois de criar a distribuição CloudFront com o bucket `trilhashop-frontend` como origem, capturar a tela de detalhes da distribuição já com status "Enabled" e o domínio `*.cloudfront.net` visível.
+
+Acesse o domínio CloudFront gerado, preencha o formulário e confirme que um pedido é de fato gravado na tabela `trilhashop-pedidos` (módulo 13) — o mesmo teste feito por `curl` no módulo 14, agora através de uma interface real. Depois, feche o ciclo aberto no módulo 11: volte ao registro de failover do Route 53 e troque o valor placeholder `203.0.113.10` pelo endpoint de site estático do bucket `trilhashop-frontend` (visível nas propriedades do bucket, em "Static website hosting") — agora o TrilhaShop tem um secundário de failover real, não mais um endereço de exemplo.
+
+Para fechar, volte à revisão "TrilhaShop" no Well-Architected Tool (módulo 5) e atualize as respostas dos pilares de Confiabilidade e Segurança contra a arquitetura completa — compare a lista de riscos com a que existia logo depois do módulo 4, quando só a rede existia. A queda no número de riscos identificados é a evidência mais concreta de como cada módulo desta trilha fechou uma lacuna real.
+
+`[CUSTO]` O bucket `trilhashop-frontend` e a distribuição CloudFront ficam dentro do Free Tier para o volume de tráfego de um projeto de estudo. A partir daqui, o TrilhaShop está funcionalmente completo — o próximo passo é a desmontagem, na seção seguinte, para quem termina os estudos por aqui.
+
+## Desmontando o TrilhaShop
+
+Se você chegou até aqui e não pretende manter o TrilhaShop rodando, esta seção é o roteiro inverso de tudo que os módulos 3 a 16 construíram — **a ordem importa**, porque vários recursos dependem de outros e a AWS recusa excluir algo que ainda tem uma dependência viva.
+
+1. **CloudFront (módulo 16)**: desabilitar a distribuição primeiro (leva alguns minutos para propagar), depois excluí-la.
+2. **Route 53 (módulo 11)**: excluir os registros de failover (primário e secundário), o health check, e por fim a hosted zone.
+3. **API Gateway (módulo 14)**: excluir a API `trilhashop-pedidos-api`.
+4. **Funções Lambda (módulos 14, 15)**: excluir `trilhashop-pedidos-api` e `trilhashop-moderacao-imagens`.
+5. **ECS (módulo 10)**: reduzir o `trilhashop-carrinho-service` para 0 e excluí-lo, depois excluir o `trilhashop-cluster`.
+6. **RDS (módulo 13)**: excluir a instância `trilhashop-catalogo-db` (desmarcar a criação de snapshot final, a menos que queira preservar os dados).
+7. **DynamoDB (módulo 13)**: excluir a tabela `trilhashop-pedidos`.
+8. **Auto Scaling Group e Load Balancer (módulos 6, 9)**: reduzir o `trilhashop-catalogo-asg` para 0 (as instâncias terminam sozinhas), excluir o ASG, excluir o `trilhashop-alb`, excluir o target group, excluir o launch template.
+9. **Buckets S3 (módulos 12, 16)**: esvaziar (incluindo todas as versões) e excluir `trilhashop-frontend` e `trilhashop-product-images`.
+10. **CloudFormation (módulo 8)**: excluir a stack `trilhashop-staging` (remove a VPC de staging inteira de uma vez).
+11. **VPC (módulo 4)**: excluir o(s) NAT Gateway(s) primeiro, depois liberar os Elastic IPs associados a eles (se sobrarem, geram cobrança mesmo sem NAT Gateway anexado), depois excluir a VPC inteira — isso remove automaticamente subnets, route tables, Internet Gateway e Security Groups associados.
+12. **IAM (módulo 3)**: excluir as roles `trilhashop-ec2-role` e `trilhashop-lambda-role`, o grupo `trilhashop-operadores`, e qualquer usuário de teste remanescente.
+
+`[ATENÇÃO]` O passo mais frequentemente esquecido é o Elastic IP do NAT Gateway: excluir o NAT Gateway não libera automaticamente o IP associado a ele, e um Elastic IP não associado a nenhum recurso ativo é cobrado por hora — um dos poucos casos na AWS em que "não estar sendo usado" ainda gera custo, precisamente para desencorajar reservar endereços IPv4 públicos sem necessidade.
 
 ## Revisão organizada pelos quatro domínios do exame
 
@@ -97,7 +155,9 @@ Antes de agendar o exame, confirme que você consegue, sem consultar nenhum mód
 - [ ] Recitar os quatro domínios do exame e seus pesos (24/30/34/12).
 - [ ] Diferenciar Cost Explorer, Pricing Calculator, Budgets e Cost and Usage Report.
 - [ ] Listar os cinco planos de suporte da AWS em ordem crescente e o que cada um adiciona.
-- [ ] Ter completado o projeto integrador — site estático em S3/CloudFront conectado a uma API Lambda gravando em DynamoDB — e o ter desmontado corretamente ao final.
+- [ ] Ter completado a vitrine do TrilhaShop (S3 + CloudFront) conectada à API de pedidos, e atualizado o registro de failover do módulo 11 com o endpoint real.
+- [ ] Ter atualizado a revisão do Well-Architected Tool contra a arquitetura completa e comparado com a versão do módulo 5.
+- [ ] Se for encerrar os estudos por aqui: ter seguido o roteiro de "Desmontando o TrilhaShop" na ordem descrita, incluindo a liberação do Elastic IP do NAT Gateway.
 - [ ] Ter revisado o checklist de saída e os blocos `[TEORIA]` de todos os módulos 01 a 15.
 - [ ] Ter feito ao menos um simulado completo, no formato de 65 perguntas em 90 minutos.
 - [ ] Saber para qual certificação seguir depois — Solutions Architect Associate ou AI Practitioner — dependendo do seu interesse.
