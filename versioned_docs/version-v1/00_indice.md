@@ -8,10 +8,8 @@ sidebar_label: "Início"
 
 # Trilha de Estudo — AWS Cloud Practitioner
 
-> Uma apostila, não uma lista de referência. Cada módulo assume que você não sabe nada do assunto e constrói o raciocínio até você saber operar o serviço com entendimento, não por decoreba.
-> Preparação prática para a certificação **AWS Certified Cloud Practitioner (CLF-C02)**, apoiada em laboratórios reais no AWS Free Tier.
-> Saída: um arquivo `.md` por módulo. Este arquivo é o índice, o mapa e o manual de uso da trilha.
 
+> Preparação prática para a certificação **AWS Certified Cloud Practitioner (CLF-C02)**, apoiada em laboratórios reais no AWS Free Tier.
 ---
 
 ## Por que esta trilha existe
