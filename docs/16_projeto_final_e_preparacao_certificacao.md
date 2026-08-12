@@ -25,8 +25,47 @@ Você já usa duas dessas ferramentas desde o módulo 1: o **Billing and Cost Ma
 ![Console do AWS Budgets na tela de criação de um orçamento, com o campo de valor-limite e as opções de alerta por percentual configuráveis](screenshots/16-projeto-final-e-preparacao-certificacao/01-aws-budgets-criar-orcamento.png)
 > `[PRINT]` Passo a passo para capturar: abrir direto em https://console.aws.amazon.com/billing/home#/budgets (ou, dentro de "Billing and Cost Management", clicar em "Budgets" no menu lateral) e depois em "Create budget". Escolher o template "Zero spend budget" (que avisa em qualquer gasto acima de zero — apropriado para uma conta de estudo) ou "Customize" para configurar um valor manual. Capturar a tela mostrando os campos de configuração antes de concluir. Pode concluir a criação — um budget não gera custo algum por existir.
 
+> `[CLI]` Criação de um budget de gasto zero, com alerta por e-mail em 100% do limite (ajuste `<sua-conta-id>` e `<seu-email>`):
+> ```bash
+> cat > /tmp/budget.json <<'EOF'
+> {
+>   "BudgetName": "trilha-cloud-zero-spend",
+>   "BudgetLimit": { "Amount": "0.01", "Unit": "USD" },
+>   "TimeUnit": "MONTHLY",
+>   "BudgetType": "COST"
+> }
+> EOF
+> cat > /tmp/notifications.json <<'EOF'
+> [{
+>   "Notification": {
+>     "NotificationType": "ACTUAL",
+>     "ComparisonOperator": "GREATER_THAN",
+>     "Threshold": 100
+>   },
+>   "Subscribers": [{ "SubscriptionType": "EMAIL", "Address": "<seu-email>" }]
+> }]
+> EOF
+>
+> aws budgets create-budget \
+>   --account-id <sua-conta-id> \
+>   --budget file:///tmp/budget.json \
+>   --notifications-with-subscribers file:///tmp/notifications.json
+> ```
+> Resultado esperado: `aws budgets describe-budgets --account-id <sua-conta-id>` lista `trilha-cloud-zero-spend`. Documentação: https://docs.aws.amazon.com/cli/latest/reference/budgets/create-budget.html
+
 ![Console do AWS Cost Explorer mostrando um gráfico de gastos por serviço ao longo do tempo, com a legenda de cores por serviço da AWS](screenshots/16-projeto-final-e-preparacao-certificacao/02-cost-explorer-grafico.png)
 > `[PRINT]` Passo a passo para capturar: abrir direto em https://console.aws.amazon.com/cost-management/home#/cost-explorer (ou, dentro de "Billing and Cost Management", clicar em "Cost Explorer") — pode ser necessário habilitar na primeira vez, sem custo. Capturar a tela mostrando o gráfico de gastos, mesmo que os valores sejam próximos de zero por a conta ser de estudo — o importante é a interface do gráfico e o filtro por serviço visível.
+
+> `[CLI]` O mesmo dado retroativo, filtrado por serviço, direto no terminal:
+> ```bash
+> aws ce get-cost-and-usage \
+>   --time-period Start=2026-08-01,End=2026-08-31 \
+>   --granularity MONTHLY \
+>   --metrics "UnblendedCost" \
+>   --group-by Type=DIMENSION,Key=SERVICE \
+>   --region us-east-1
+> ```
+> Resultado esperado: um JSON com o gasto agrupado por nome de serviço (por exemplo, `Amazon Relational Database Service`, `Amazon Elastic Compute Cloud`) no período informado. Documentação: https://docs.aws.amazon.com/cli/latest/reference/ce/get-cost-and-usage.html
 
 Para organizações com múltiplas equipes ou projetos numa mesma conta, **cost allocation tags** permitem marcar recursos (uma instância EC2, um bucket S3) com metadados como `projeto: trilha-cloud` ou `equipe: financeiro`, que depois aparecem como colunas filtráveis no **AWS Cost and Usage Report** — o relatório mais granular de billing que a AWS oferece, usado tipicamente por ferramentas de análise financeira automatizada, não lido manualmente linha a linha.
 
@@ -93,6 +132,44 @@ Envie esse arquivo para um novo bucket `trilhashop-frontend` (não o `trilhashop
 ![Distribuição CloudFront concluída, com o bucket trilhashop-frontend como origem e o domínio de distribuição gerado (*.cloudfront.net)](screenshots/16-projeto-final-e-preparacao-certificacao/04-cloudfront-trilhashop-frontend.png)
 > `[PRINT]` Passo a passo para capturar: depois de criar a distribuição CloudFront com o bucket `trilhashop-frontend` como origem, capturar a tela de detalhes da distribuição já com status "Enabled" e o domínio `*.cloudfront.net` visível.
 
+> `[CLI]` Criação do bucket público, upload do `index.html`, ativação de hospedagem de site estático e criação da distribuição CloudFront:
+> ```bash
+> aws s3api create-bucket \
+>   --bucket trilhashop-frontend \
+>   --region sa-east-1 \
+>   --create-bucket-configuration LocationConstraint=sa-east-1
+>
+> aws s3api put-public-access-block \
+>   --bucket trilhashop-frontend \
+>   --public-access-block-configuration BlockPublicPolicy=false,RestrictPublicBuckets=false,BlockPublicAcls=false,IgnorePublicAcls=false
+>
+> cat > /tmp/bucket-policy.json <<'EOF'
+> {
+>   "Version": "2012-10-17",
+>   "Statement": [{
+>     "Effect": "Allow",
+>     "Principal": "*",
+>     "Action": "s3:GetObject",
+>     "Resource": "arn:aws:s3:::trilhashop-frontend/*"
+>   }]
+> }
+> EOF
+> aws s3api put-bucket-policy --bucket trilhashop-frontend --policy file:///tmp/bucket-policy.json
+>
+> aws s3api put-bucket-website \
+>   --bucket trilhashop-frontend \
+>   --website-configuration '{"IndexDocument":{"Suffix":"index.html"}}'
+>
+> aws s3 cp index.html s3://trilhashop-frontend/index.html
+>
+> WEBSITE_ENDPOINT="trilhashop-frontend.s3-website-sa-east-1.amazonaws.com"
+>
+> aws cloudfront create-distribution \
+>   --origin-domain-name $WEBSITE_ENDPOINT \
+>   --default-root-object index.html
+> ```
+> Resultado esperado: `aws cloudfront list-distributions --query 'DistributionList.Items[].DomainName'` mostra o domínio `*.cloudfront.net` gerado, e o campo `Status` da distribuição chega a `Deployed` em alguns minutos. Documentação: https://docs.aws.amazon.com/cli/latest/reference/cloudfront/create-distribution.html
+
 Acesse o domínio CloudFront gerado, preencha o formulário e confirme que um pedido é de fato gravado na tabela `trilhashop-pedidos` (módulo 13) — o mesmo teste feito por `curl` no módulo 14, agora através de uma interface real. Depois, feche o ciclo aberto no módulo 11: volte ao registro de failover do Route 53 e troque o valor placeholder `203.0.113.10` pelo endpoint de site estático do bucket `trilhashop-frontend` (visível nas propriedades do bucket, em "Static website hosting") — agora o TrilhaShop tem um secundário de failover real, não mais um endereço de exemplo.
 
 Para fechar, volte à revisão "TrilhaShop" no Well-Architected Tool (módulo 5) e atualize as respostas dos pilares de Confiabilidade e Segurança contra a arquitetura completa — compare a lista de riscos com a que existia logo depois do módulo 4, quando só a rede existia. A queda no número de riscos identificados é a evidência mais concreta de como cada módulo desta trilha fechou uma lacuna real.
@@ -117,6 +194,69 @@ Se você chegou até aqui e não pretende manter o TrilhaShop rodando, esta seç
 12. **IAM (módulo 3)**: excluir as roles `trilhashop-ec2-role` e `trilhashop-lambda-role`, o grupo `trilhashop-operadores`, e qualquer usuário de teste remanescente.
 
 `[ATENÇÃO]` O passo mais frequentemente esquecido é o Elastic IP do NAT Gateway: excluir o NAT Gateway não libera automaticamente o IP associado a ele, e um Elastic IP não associado a nenhum recurso ativo é cobrado por hora — um dos poucos casos na AWS em que "não estar sendo usado" ainda gera custo, precisamente para desencorajar reservar endereços IPv4 públicos sem necessidade.
+
+> `[CLI]` A mesma sequência de desmontagem, na mesma ordem, via terminal — o roteiro completo é mais rápido de auditar e reexecutar em lote do que clicar recurso por recurso no Console:
+> ```bash
+> # 1. CloudFront
+> DIST_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?Comment=='' || contains(Origins.Items[0].DomainName, 'trilhashop-frontend')].Id" --output text)
+> aws cloudfront get-distribution-config --id $DIST_ID > /tmp/dist-config.json
+> ETAG=$(jq -r '.ETag' /tmp/dist-config.json)
+> jq '.DistributionConfig | .Enabled = false' /tmp/dist-config.json > /tmp/dist-disabled.json
+> aws cloudfront update-distribution --id $DIST_ID --distribution-config file:///tmp/dist-disabled.json --if-match $ETAG
+> aws cloudfront wait distribution-deployed --id $DIST_ID
+> NEW_ETAG=$(aws cloudfront get-distribution-config --id $DIST_ID --query ETag --output text)
+> aws cloudfront delete-distribution --id $DIST_ID --if-match $NEW_ETAG
+>
+> # 2. Route 53
+> aws route53 change-resource-record-sets --hosted-zone-id $ZONE_ID --change-batch file:///tmp/delete-records.json
+> aws route53 delete-health-check --health-check-id $HC_ID
+> aws route53 delete-hosted-zone --id $ZONE_ID
+>
+> # 3-4. API Gateway e Lambda
+> aws apigatewayv2 delete-api --api-id $API_ID
+> aws lambda delete-function --function-name trilhashop-pedidos-api
+> aws lambda delete-function --function-name trilhashop-moderacao-imagens
+>
+> # 5. ECS
+> aws ecs update-service --cluster trilhashop-cluster --service trilhashop-carrinho-service --desired-count 0
+> aws ecs delete-service --cluster trilhashop-cluster --service trilhashop-carrinho-service
+> aws ecs delete-cluster --cluster trilhashop-cluster
+>
+> # 6. RDS (sem snapshot final)
+> aws rds delete-db-instance --db-instance-identifier trilhashop-catalogo-db --skip-final-snapshot
+> aws rds wait db-instance-deleted --db-instance-identifier trilhashop-catalogo-db
+>
+> # 7. DynamoDB
+> aws dynamodb delete-table --table-name trilhashop-pedidos
+>
+> # 8. Auto Scaling Group e Load Balancer
+> aws autoscaling update-auto-scaling-group --auto-scaling-group-name trilhashop-catalogo-asg --desired-capacity 0 --min-size 0
+> aws autoscaling delete-auto-scaling-group --auto-scaling-group-name trilhashop-catalogo-asg
+> aws elbv2 delete-load-balancer --load-balancer-arn $ALB_ARN
+> aws elbv2 delete-target-group --target-group-arn $TG_ARN
+>
+> # 9. Buckets S3 (esvaziar todas as versões antes de excluir)
+> aws s3api delete-objects --bucket trilhashop-frontend --delete "$(aws s3api list-object-versions --bucket trilhashop-frontend --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}')"
+> aws s3api delete-bucket --bucket trilhashop-frontend
+> aws s3api delete-objects --bucket trilhashop-product-images --delete "$(aws s3api list-object-versions --bucket trilhashop-product-images --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}')"
+> aws s3api delete-bucket --bucket trilhashop-product-images
+>
+> # 10. CloudFormation
+> aws cloudformation delete-stack --stack-name trilhashop-staging
+> aws cloudformation wait stack-delete-complete --stack-name trilhashop-staging
+>
+> # 11. VPC — NAT Gateway, depois o Elastic IP associado a ele
+> aws ec2 delete-nat-gateway --nat-gateway-id $NAT_GW_ID
+> aws ec2 wait nat-gateway-deleted --nat-gateway-ids $NAT_GW_ID
+> aws ec2 release-address --allocation-id $EIP_ALLOC_ID
+> aws ec2 delete-vpc --vpc-id $VPC_ID
+>
+> # 12. IAM
+> aws iam delete-role --role-name trilhashop-ec2-role
+> aws iam delete-role --role-name trilhashop-lambda-role
+> aws iam delete-group --group-name trilhashop-operadores
+> ```
+> Resultado esperado: ao final, `aws resourcegroupstaggingapi get-resources --tag-filters Key=projeto,Values=trilhashop` (se as tags foram aplicadas ao longo da trilha) não retorna nenhum recurso — confirmação de que nada do TrilhaShop ficou cobrando. Documentação: https://docs.aws.amazon.com/cli/latest/reference/cloudfront/delete-distribution.html
 
 ## Revisão organizada pelos quatro domínios do exame
 

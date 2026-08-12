@@ -67,6 +67,7 @@ Cada seção de "Contribuição ao projeto integrador", nos módulos seguintes, 
 | `[APROFUNDAMENTO]` | Conteúdo que ultrapassa o escopo do Cloud Practitioner e entra em nível Solutions Architect Associate. Opcional na primeira leitura.                                                         |
 | `[REFERÊNCIA]`     | Fontes oficiais e curadas — documentação AWS, AWS Skill Builder, whitepapers. Sem blogpost genérico, sem fórum.                                                                              |
 | `[PRINT]`          | Instrução de captura de tela — ver a seção "Prints do Console" logo abaixo.                                                                                                                  |
+| `[CLI]` | Alternativa via terminal para quem prefere não usar o Console — comando `aws` equivalente, link da documentação oficial do comando, e o resultado que confirma que funcionou. |
 
 ---
 

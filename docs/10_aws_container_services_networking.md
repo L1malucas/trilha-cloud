@@ -42,6 +42,13 @@ Antes de um container poder rodar, sua imagem precisa estar armazenada em algum 
 ![Console do ECR mostrando a lista de repositórios de imagens de container da conta, ou a tela de criação de um novo repositório](screenshots/10-aws-container-services-networking/02-ecr-repositorios.png)
 > `[PRINT]` Passo a passo para capturar: abrir o ECR direto em https://console.aws.amazon.com/ecr/repositories?region=sa-east-1 (ou buscar "ECR" na barra de busca do Console). Capturar a tela de "Repositories", mostrando a lista (provavelmente vazia numa conta nova) e o botão "Create repository".
 
+> `[CLI]`
+> ```bash
+> aws ecr create-repository --repository-name trilhashop-carrinho --region sa-east-1
+> aws ecr describe-repositories --region sa-east-1
+> ```
+> Resultado esperado: o repositório aparece na saída de `describe-repositories`, com `repositoryUri` pronto para `docker push`. Documentação: https://docs.aws.amazon.com/cli/latest/reference/ecr/create-repository.html
+
 ## EKS: quando a orquestração precisa ser Kubernetes
 
 O **Amazon EKS (Elastic Kubernetes Service)** é a alternativa ao ECS para quem precisa (ou já usa) especificamente o **Kubernetes** — uma plataforma de orquestração de containers de código aberto, mantida pela Cloud Native Computing Foundation, e não exclusiva da AWS (roda também em outros provedores de nuvem e on-premises). A escolha entre ECS e EKS costuma depender de contexto organizacional: equipes que já têm conhecimento de Kubernetes, ou que precisam manter portabilidade entre nuvens diferentes, tendem a preferir EKS; equipes que estão começando do zero na AWS e não têm essa exigência de portabilidade frequentemente acham o ECS mais simples de operar, por ser mais integrado nativamente ao restante do ecossistema AWS.
@@ -66,6 +73,28 @@ Suba uma única task Fargate descartável, fora do TrilhaShop, só para ver o ci
 
 `[CUSTO]` Fargate cobra por vCPU e memória alocados enquanto a task roda, por segundo. Uma única task pequena rodando por poucos minutos custa frações de centavo, mas não tem a mesma cobertura generosa de Free Tier que o EC2 — pare a task assim que confirmar que ela respondeu.
 
+> `[CLI]`
+> ```bash
+> aws ecs create-cluster --cluster-name laboratorio-modulo-10
+>
+> cat > task-def.json <<EOF
+> {
+>   "family": "nginx-teste",
+>   "networkMode": "awsvpc",
+>   "requiresCompatibilities": ["FARGATE"],
+>   "cpu": "256", "memory": "512",
+>   "executionRoleArn": "arn:aws:iam::<seu-account-id>:role/ecsTaskExecutionRole",
+>   "containerDefinitions": [{"name": "nginx", "image": "public.ecr.aws/nginx/nginx:latest",
+>     "portMappings": [{"containerPort": 80}]}]
+> }
+> EOF
+> aws ecs register-task-definition --cli-input-json file://task-def.json
+>
+> aws ecs run-task --cluster laboratorio-modulo-10 --task-definition nginx-teste --launch-type FARGATE \
+>   --network-configuration "awsvpcConfiguration={subnets=[$PUB1],securityGroups=[$WEB_SG],assignPublicIp=ENABLED}"
+> ```
+> Resultado esperado: `aws ecs describe-tasks --cluster laboratorio-modulo-10 --tasks <task-arn> --query 'tasks[0].lastStatus'` muda de `PENDING` para `RUNNING` em cerca de um minuto. Para limpar: `aws ecs stop-task --cluster laboratorio-modulo-10 --task <task-arn>` e `aws ecs delete-cluster --cluster laboratorio-modulo-10`. Documentação: https://docs.aws.amazon.com/cli/latest/reference/ecs/run-task.html
+
 ### Contribuição ao projeto integrador
 
 O carrinho de compras do TrilhaShop vira um segundo serviço, real e independente do catálogo em EC2, rodando na mesma VPC:
@@ -77,6 +106,31 @@ Crie uma task definition `trilhashop-carrinho-td` usando a mesma imagem de exemp
 
 ![Service trilhashop-carrinho-service rodando no cluster, mostrando 1/1 tasks running](screenshots/10-aws-container-services-networking/04-ecs-service-carrinho-rodando.png)
 > `[PRINT]` Passo a passo para capturar: depois de criar o service, capturar a tela do cluster mostrando `trilhashop-carrinho-service` com "Running tasks" = 1 e "Desired tasks" = 1.
+
+> `[CLI]`
+> ```bash
+> aws ecs create-cluster --cluster-name trilhashop-cluster
+>
+> cat > carrinho-task-def.json <<EOF
+> {
+>   "family": "trilhashop-carrinho-td",
+>   "networkMode": "awsvpc",
+>   "requiresCompatibilities": ["FARGATE"],
+>   "cpu": "256", "memory": "512",
+>   "executionRoleArn": "arn:aws:iam::<seu-account-id>:role/ecsTaskExecutionRole",
+>   "containerDefinitions": [{"name": "carrinho", "image": "public.ecr.aws/nginx/nginx:latest",
+>     "portMappings": [{"containerPort": 80}]}]
+> }
+> EOF
+> aws ecs register-task-definition --cli-input-json file://carrinho-task-def.json
+>
+> aws ecs create-service --cluster trilhashop-cluster \
+>   --service-name trilhashop-carrinho-service \
+>   --task-definition trilhashop-carrinho-td \
+>   --desired-count 1 --launch-type FARGATE \
+>   --network-configuration "awsvpcConfiguration={subnets=[$PRIV1],securityGroups=[$APP_SG]}"
+> ```
+> Resultado esperado: `aws ecs describe-services --cluster trilhashop-cluster --services trilhashop-carrinho-service --query 'services[0].[runningCount,desiredCount]'` retorna `[1, 1]` depois de alguns minutos. Documentação: https://docs.aws.amazon.com/cli/latest/reference/ecs/create-service.html
 
 Como o service está em subnet privada (sem IP público, seguindo o mesmo padrão de defesa em profundidade do catálogo em EC2), ele não é acessível diretamente do navegador — em uma arquitetura de produção completa, um segundo target group no `trilhashop-alb` (ou um Load Balancer dedicado) exporia esse serviço externamente, o mesmo padrão do módulo 6 aplicado a um destino de container em vez de uma instância. Para os fins desta trilha, confirmar "1/1 tasks running" já demonstra o serviço operando corretamente dentro da rede do projeto.
 

@@ -35,6 +35,16 @@ O **Amazon RDS (Relational Database Service)** gerencia bancos relacionais das e
 ![Console do RDS na etapa de criação de um banco de dados, mostrando a seleção de engine (PostgreSQL, MySQL, entre outras) e o campo de classe de instância elegível ao Free Tier](screenshots/13-opcoes-de-banco-de-dados/01-rds-criar-banco-engine.png)
 > `[PRINT]` Passo a passo para capturar: com a região São Paulo selecionada, abrir o RDS direto em https://console.aws.amazon.com/rds/home?region=sa-east-1 (ou buscar "RDS" na barra de busca do Console). Clicar em "Create database". Selecionar o método "Standard create" e escolher uma engine (por exemplo, PostgreSQL). Capturar a tela mostrando os cartões de seleção de engine e, mais abaixo, o template "Free tier" selecionado.
 
+> `[CLI]` Listagem das engines e classes de instância elegíveis ao Free Tier, sem criar nada ainda (a criação real acontece na contribuição ao projeto integrador, mais abaixo):
+> ```bash
+> aws rds describe-orderable-db-instance-options \
+>   --engine postgres \
+>   --db-instance-class db.t3.micro \
+>   --region sa-east-1 \
+>   --query 'OrderableDBInstanceOptions[].EngineVersion'
+> ```
+> Resultado esperado: uma lista de versões do PostgreSQL disponíveis para `db.t3.micro` em `sa-east-1`. Documentação: https://docs.aws.amazon.com/cli/latest/reference/rds/describe-orderable-db-instance-options.html
+
 Duas capacidades do RDS merecem destaque especial porque conectam diretamente com módulos anteriores. **Multi-AZ** replica o banco de forma síncrona para uma AZ diferente da mesma região — se a instância primária falhar, o RDS promove automaticamente a réplica para primária, com interrupção mínima. É a aplicação direta, num banco de dados, da mesma lógica de redundância multi-AZ vista pela primeira vez no módulo 2. **Read replicas**, por outro lado, replicam de forma assíncrona e servem para escalar **leitura**, não disponibilidade — você pode ter múltiplas read replicas recebendo consultas de leitura, aliviando a carga da instância primária, que continua sendo a única a receber escritas.
 
 ![Console do RDS na etapa de configuração de disponibilidade, mostrando a opção "Multi-AZ deployment" e o aviso de custo adicional associado](screenshots/13-opcoes-de-banco-de-dados/02-rds-multi-az-toggle.png)
@@ -57,10 +67,37 @@ Vamos criar uma tabela real — DynamoDB no modo on-demand tem uma camada sempre
 ![Console do DynamoDB na tela de criação de tabela, com os campos de nome da tabela e chave de partição (partition key) preenchidos](screenshots/13-opcoes-de-banco-de-dados/03-dynamodb-criar-tabela.png)
 > `[PRINT]` Passo a passo para capturar: abrir o DynamoDB direto em https://console.aws.amazon.com/dynamodbv2/home?region=sa-east-1 (ou buscar "DynamoDB" na barra de busca do Console). Clicar em "Create table". Preencher o nome da tabela (por exemplo, `trilha-cloud-lab13`) e a chave de partição (por exemplo, `id`, tipo String). Manter as configurações padrão (modo de capacidade "On-demand"). Capturar a tela preenchida antes de concluir a criação. Concluir a criação da tabela.
 
+> `[CLI]` Criação da tabela via terminal:
+> ```bash
+> aws dynamodb create-table \
+>   --table-name trilha-cloud-lab13 \
+>   --attribute-definitions AttributeName=id,AttributeType=S \
+>   --key-schema AttributeName=id,KeyType=HASH \
+>   --billing-mode PAY_PER_REQUEST \
+>   --region sa-east-1
+>
+> aws dynamodb wait table-exists --table-name trilha-cloud-lab13 --region sa-east-1
+> ```
+> Resultado esperado: `aws dynamodb describe-table --table-name trilha-cloud-lab13` mostra `"TableStatus": "ACTIVE"`. Documentação: https://docs.aws.amazon.com/cli/latest/reference/dynamodb/create-table.html
+
 Com a tabela criada, adicione um item manualmente pela interface, e depois consulte-o de volta.
 
 ![Console do DynamoDB dentro da tabela criada, na aba "Explore table items", mostrando um item adicionado manualmente com seus atributos](screenshots/13-opcoes-de-banco-de-dados/04-dynamodb-item-adicionado.png)
 > `[PRINT]` Passo a passo para capturar: dentro da tabela recém-criada, clicar em "Explore table items" e depois em "Create item". Preencher o valor da chave de partição (`id`) com um valor qualquer (por exemplo, `item-001`) e adicionar um atributo extra (por exemplo, `descricao` = "Item de teste do modulo 13"). Salvar o item. Capturar a tela da listagem de itens da tabela mostrando esse item criado, com suas colunas de atributos visíveis.
+
+> `[CLI]` Inserção e leitura de um item:
+> ```bash
+> aws dynamodb put-item \
+>   --table-name trilha-cloud-lab13 \
+>   --item '{"id": {"S": "item-001"}, "descricao": {"S": "Item de teste do modulo 13"}}' \
+>   --region sa-east-1
+>
+> aws dynamodb get-item \
+>   --table-name trilha-cloud-lab13 \
+>   --key '{"id": {"S": "item-001"}}' \
+>   --region sa-east-1
+> ```
+> Resultado esperado: `get-item` devolve o item com os atributos `id` e `descricao` preenchidos. Documentação: https://docs.aws.amazon.com/cli/latest/reference/dynamodb/put-item.html
 
 > `[TEORIA]` Para a prova: DynamoDB é chave-valor/documento, sem esquema fixo por item, projetado para escala horizontal e latência de milissegundos de dois dígitos consistente, independente do tamanho da tabela. Modo on-demand cobra por requisição; modo provisioned reserva capacidade fixa, mais barato para tráfego previsível.
 
@@ -70,6 +107,12 @@ O **Amazon ElastiCache** gerencia bancos de dados **em memória** (engines Redis
 
 ![Console do ElastiCache mostrando a tela de criação de um cluster Redis ou Memcached, com a escolha de engine e tipo de nó](screenshots/13-opcoes-de-banco-de-dados/05-elasticache-criar-cluster.png)
 > `[PRINT]` Passo a passo para capturar: abrir o ElastiCache direto em https://console.aws.amazon.com/elasticache/home?region=sa-east-1 (ou buscar "ElastiCache" na barra de busca do Console). Clicar em "Create cache" (ou "Redis clusters" → "Create"). Capturar a tela do assistente mostrando a escolha entre engine Redis e Memcached, e a seleção de tipo de nó. Não é necessário concluir a criação — ElastiCache não tem cobertura de Free Tier tão simples quanto DynamoDB.
+
+> `[CLI]` Consulta das engines disponíveis, sem criar um cluster de fato (mesma cautela de custo do Console):
+> ```bash
+> aws elasticache describe-cache-engine-versions --engine redis --region sa-east-1
+> ```
+> Resultado esperado: uma lista de versões do Redis suportadas pelo ElastiCache na região. Documentação: https://docs.aws.amazon.com/cli/latest/reference/elasticache/describe-cache-engine-versions.html
 
 ## Migrando para a AWS: DMS e SCT
 
@@ -94,12 +137,48 @@ O TrilhaShop ganha os dois bancos reais desta vez — um relacional para o catá
 ![Assistente de criação do RDS trilhashop-catalogo-db, com engine PostgreSQL, template Free tier, e a VPC/subnets privadas da trilhashop-vpc selecionadas](screenshots/13-opcoes-de-banco-de-dados/06-rds-trilhashop-configuracao.png)
 > `[PRINT]` Passo a passo para capturar: "RDS" → "Create database" → "Standard create" → engine PostgreSQL → template "Free tier". Identificador da instância: `trilhashop-catalogo-db`. Em "Connectivity", VPC: `trilhashop-vpc`; "DB Subnet Group": criar um novo grupo usando as duas subnets **privadas** do módulo 4; VPC Security Group: selecionar o `trilhashop-db-sg` (criado no módulo 4) em vez de criar um novo; "Public access": **No**. Capturar a tela com essa configuração de rede preenchida antes de criar. Concluir a criação (a instância leva alguns minutos para ficar disponível).
 
+> `[CLI]` Criação real do banco do TrilhaShop, reaproveitando `$PRIV1`, `$PRIV2` e `$DB_SG` do módulo 4:
+> ```bash
+> aws rds create-db-subnet-group \
+>   --db-subnet-group-name trilhashop-db-subnet-group \
+>   --db-subnet-group-description "Subnets privadas do TrilhaShop" \
+>   --subnet-ids $PRIV1 $PRIV2
+>
+> aws rds create-db-instance \
+>   --db-instance-identifier trilhashop-catalogo-db \
+>   --engine postgres \
+>   --db-instance-class db.t3.micro \
+>   --allocated-storage 20 \
+>   --master-username trilhashop_admin \
+>   --master-user-password '<senha-forte-sua-escolha>' \
+>   --db-subnet-group-name trilhashop-db-subnet-group \
+>   --vpc-security-group-ids $DB_SG \
+>   --no-publicly-accessible \
+>   --region sa-east-1
+>
+> aws rds wait db-instance-available --db-instance-identifier trilhashop-catalogo-db --region sa-east-1
+> ```
+> Resultado esperado: `aws rds describe-db-instances --db-instance-identifier trilhashop-catalogo-db --query 'DBInstances[0].DBInstanceStatus'` retorna `"available"`, com `"PubliclyAccessible": false`. Documentação: https://docs.aws.amazon.com/cli/latest/reference/rds/create-db-instance.html
+
 O `trilhashop-db-sg` só aceita conexões vindas do `trilhashop-app-sg` (regra criada no módulo 4) — ou seja, mesmo com a instância criada, nada fora da camada de aplicação do TrilhaShop consegue se conectar a ela, nem você, diretamente da sua máquina. Essa é a cadeia de menor privilégio do módulo 3 e do módulo 4 funcionando de ponta a ponta num recurso real.
 
 Em seguida, crie a tabela real de pedidos no DynamoDB:
 
 ![Console do DynamoDB criando a tabela trilhashop-pedidos, com chave de partição id-pedido](screenshots/13-opcoes-de-banco-de-dados/07-dynamodb-trilhashop-pedidos.png)
 > `[PRINT]` Passo a passo para capturar: "DynamoDB" → "Create table". Nome: `trilhashop-pedidos`. Partition key: `idPedido` (String). Capacity mode: On-demand. Capturar a tela preenchida antes de criar. Concluir a criação — o módulo 14 volta aqui para gravar pedidos de verdade via Lambda.
+
+> `[CLI]` Criação da tabela real de pedidos:
+> ```bash
+> aws dynamodb create-table \
+>   --table-name trilhashop-pedidos \
+>   --attribute-definitions AttributeName=idPedido,AttributeType=S \
+>   --key-schema AttributeName=idPedido,KeyType=HASH \
+>   --billing-mode PAY_PER_REQUEST \
+>   --region sa-east-1
+>
+> aws dynamodb wait table-exists --table-name trilhashop-pedidos --region sa-east-1
+> ```
+> Resultado esperado: `aws dynamodb describe-table --table-name trilhashop-pedidos --query 'Table.TableStatus'` retorna `"ACTIVE"`. Documentação: https://docs.aws.amazon.com/cli/latest/reference/dynamodb/create-table.html
 
 `[CUSTO]` Este é o recurso mais caro do TrilhaShop até agora: o RDS, mesmo `db.t3.micro` dentro do Free Tier (750 horas/mês), cobra por hora enquanto a instância estiver `available`. Ao pausar entre sessões de estudo mais longas, use "Actions" → "Stop temporarily" — mas lembre da ressalva da tabela em `00_indice.md`: a AWS reinicia uma instância RDS parada automaticamente depois de 7 dias, então pausas muito longas exigem parar de novo periodicamente. A tabela DynamoDB de pedidos, em modo on-demand e vazia, não custa nada parada.
 

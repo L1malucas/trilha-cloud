@@ -61,6 +61,19 @@ Quando você envia um template para o CloudFormation, ele cria uma **stack**: um
 ![Console do CloudFormation na etapa "Create stack", com a opção de colar o template diretamente no editor de texto embutido](screenshots/08-cloudformation/01-create-stack-template-editor.png)
 > `[PRINT]` Passo a passo para capturar: abrir o CloudFormation direto em https://console.aws.amazon.com/cloudformation/home?region=sa-east-1 (ou buscar "CloudFormation" na barra de busca do Console). Clicar em "Create stack" → "With new resources (standard)". Selecionar a opção de "Template is ready" e, na fonte do template, escolher "Enter template in Designer" ou o editor de texto direto na tela (dependendo da versão do Console, pode ser "Upload a template file" — nesse caso, colar o YAML acima num arquivo local antes de enviar). Capturar a tela com o template YAML visível no editor embutido, antes de avançar.
 
+> `[CLI]` CloudFormation é, ele mesmo, um serviço pensado para automação — a via CLI aqui é tão natural quanto o Console:
+> ```bash
+> # salve o YAML acima como template.yaml, depois:
+> aws cloudformation create-stack \
+>   --stack-name laboratorio-modulo-08 \
+>   --template-body file://template.yaml \
+>   --parameters ParameterKey=NomeDoBucket,ParameterValue=trilha-cloud-aws-lab08-$(date +%s)
+>
+> aws cloudformation wait stack-create-complete --stack-name laboratorio-modulo-08
+> aws cloudformation describe-stacks --stack-name laboratorio-modulo-08 --query 'Stacks[0].StackStatus'
+> ```
+> Resultado esperado: depois do `wait` retornar (pode levar um a dois minutos), o `describe-stacks` mostra `"CREATE_COMPLETE"` — o mesmo status que aparece na lista do Console. Documentação: https://docs.aws.amazon.com/cli/latest/reference/cloudformation/create-stack.html
+
 Depois de enviar o template e preencher o parâmetro `NomeDoBucket` (use um nome único, como `trilha-cloud-aws-lab08-` seguido de números aleatórios, já que nomes de bucket S3 são únicos globalmente), o CloudFormation entra em estado `CREATE_IN_PROGRESS`, cria os recursos na ordem correta de dependência, e ao final marca a stack como `CREATE_COMPLETE`.
 
 ![Aba "Resources" de uma stack do CloudFormation já criada, mostrando o bucket S3 listado com seu status "CREATE_COMPLETE"](screenshots/08-cloudformation/02-stack-resources-create-complete.png)
@@ -78,6 +91,13 @@ Nada impede que alguém, mais tarde, entre no Console e altere manualmente um re
 
 ![Resultado de uma verificação de drift detection no CloudFormation, mostrando o status "DRIFTED" ou "IN_SYNC" para os recursos da stack](screenshots/08-cloudformation/03-drift-detection-resultado.png)
 > `[PRINT]` Passo a passo para capturar: dentro da stack criada, clicar em "Stack actions" → "Detect drift". Aguardar a verificação concluir (leva alguns segundos) e capturar a tela de resultado, mostrando o status de drift por recurso (provavelmente "IN_SYNC", já que nada foi alterado manualmente ainda).
+
+> `[CLI]`
+> ```bash
+> DRIFT_ID=$(aws cloudformation detect-stack-drift --stack-name laboratorio-modulo-08 --query 'StackDriftDetectionId' --output text)
+> aws cloudformation describe-stack-drift-detection-status --stack-drift-detection-id $DRIFT_ID --query 'StackDriftStatus'
+> ```
+> Resultado esperado: depois de alguns segundos, `"IN_SYNC"` (se nada foi alterado manualmente) ou `"DRIFTED"`. Documentação: https://docs.aws.amazon.com/cli/latest/reference/cloudformation/detect-stack-drift.html
 
 > `[ATENÇÃO]` Um erro comum de quem está começando com CloudFormation é "consertar" um recurso de uma stack diretamente no Console durante uma emergência, e esquecer de refletir essa mudança no template depois. Isso funciona no curto prazo, mas na próxima vez que a stack for atualizada pelo template original, o CloudFormation pode reverter a correção manual sem aviso — porque, do ponto de vista dele, o template continua sendo a única fonte de verdade.
 
@@ -108,7 +128,30 @@ Resources:
 
 Envie essa alteração para a mesma stack já criada usando um **change set** (na tela da stack, "Stack actions" → "Create change set for current stack"), e leia o preview antes de executar — confirme que ele descreve uma **modificação** do bucket existente, não uma substituição. Execute o change set e confirme, na aba "Resources", que a tag foi aplicada.
 
+> `[CLI]`
+> ```bash
+> aws cloudformation create-change-set \
+>   --stack-name laboratorio-modulo-08 \
+>   --template-body file://template.yaml \
+>   --parameters ParameterKey=NomeDoBucket,UsePreviousValue=true \
+>   --change-set-name adicionar-tag
+>
+> aws cloudformation describe-change-set --stack-name laboratorio-modulo-08 --change-set-name adicionar-tag \
+>   --query 'Changes[].ResourceChange.[Action,Replacement]'
+>
+> # só depois de conferir que Action=Modify e Replacement=False:
+> aws cloudformation execute-change-set --stack-name laboratorio-modulo-08 --change-set-name adicionar-tag
+> ```
+> Resultado esperado: o `describe-change-set` mostra `["Modify", "False"]` — confirmando, antes de qualquer coisa acontecer, que é uma atualização no lugar, não uma recriação. Documentação: https://docs.aws.amazon.com/cli/latest/reference/cloudformation/create-change-set.html
+
 Feito isso, excluir a stack remove, por padrão, todos os recursos que ela criou — é a contrapartida exata da criação, e é por isso que CloudFormation é também uma ferramenta de limpeza confiável: você não precisa lembrar manualmente de cada recurso individual criado, só precisa excluir a stack.
+
+> `[CLI]`
+> ```bash
+> aws cloudformation delete-stack --stack-name laboratorio-modulo-08
+> aws cloudformation wait stack-delete-complete --stack-name laboratorio-modulo-08
+> ```
+> Resultado esperado: o `wait` retorna sem erro quando a exclusão terminar (se o bucket tiver objetos dentro, o delete falha — esvazie primeiro com `aws s3 rm s3://<nome-do-bucket> --recursive`). Documentação: https://docs.aws.amazon.com/cli/latest/reference/cloudformation/delete-stack.html
 
 `[CUSTO]` Um bucket S3 vazio, dentro do Free Tier, não gera custo relevante — mas é boa prática de qualquer forma excluir a stack ao final desta prática isolada. No Console do CloudFormation, selecione a stack criada e clique em "Delete". Se o bucket já tiver algum objeto dentro dele, a exclusão pode falhar até que o bucket seja esvaziado manualmente primeiro — esse é, inclusive, um comportamento de segurança proposital do CloudFormation para S3, evitando perda de dados por exclusão acidental.
 
@@ -166,6 +209,17 @@ Este template é deliberadamente mais simples que a VPC de produção do módulo
 
 ![Stack trilhashop-staging criada no CloudFormation, com a aba Resources mostrando VPC, Subnet, Internet Gateway e o attachment, todos com status CREATE_COMPLETE](screenshots/08-cloudformation/04-stack-staging-trilhashop.png)
 > `[PRINT]` Passo a passo para capturar: criar a stack `trilhashop-staging` com o template acima, do mesmo jeito que a stack de exemplo foi criada mais acima neste módulo. Capturar a aba "Resources" com os quatro recursos em `CREATE_COMPLETE`.
+
+> `[CLI]`
+> ```bash
+> aws cloudformation create-stack \
+>   --stack-name trilhashop-staging \
+>   --template-body file://staging.yaml
+>
+> aws cloudformation wait stack-create-complete --stack-name trilhashop-staging
+> aws cloudformation describe-stack-resources --stack-name trilhashop-staging --query 'StackResources[].[LogicalResourceId,ResourceStatus]'
+> ```
+> Resultado esperado: os quatro recursos (`StagingVpc`, `StagingSubnetPublica`, `StagingIgw`, `StagingIgwAttachment`) listados com `CREATE_COMPLETE`. Documentação: https://docs.aws.amazon.com/cli/latest/reference/cloudformation/create-stack.html
 
 Esse padrão — codificar a infraestrutura que existia só manualmente, e usá-la para gerar um segundo ambiente — é exatamente o argumento de negócio por trás de Infrastructure as Code que a abertura deste módulo levantou, agora aplicado ao próprio TrilhaShop.
 

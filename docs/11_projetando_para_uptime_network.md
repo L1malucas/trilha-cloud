@@ -86,10 +86,45 @@ O TrilhaShop ganha uma **hosted zone** própria e um **health check** real monit
 ![Health check do Route 53 configurado monitorando o endpoint HTTP do trilhashop-alb](screenshots/11-projetando-para-uptime-network/06-route53-health-check-alb.png)
 > `[PRINT]` Passo a passo para capturar: "Route 53" → "Health checks" → "Create health check". Tipo: "Endpoint". Protocolo HTTP, e o domínio/IP do DNS name do `trilhashop-alb` (módulo 6). Capturar a tela preenchida antes de criar. Aguardar alguns minutos até o status mostrar "Healthy".
 
+> `[CLI]`
+> ```bash
+> ZONE_ID=$(aws route53 create-hosted-zone --name trilhashop.click --caller-reference $(date +%s) \
+>   --query 'HostedZone.Id' --output text)
+>
+> ALB_DNS=$(aws elbv2 describe-load-balancers --names trilhashop-alb --query 'LoadBalancers[0].DNSName' --output text)
+> ALB_ZONE=$(aws elbv2 describe-load-balancers --names trilhashop-alb --query 'LoadBalancers[0].CanonicalHostedZoneId' --output text)
+>
+> HC_ID=$(aws route53 create-health-check --caller-reference $(date +%s) \
+>   --health-check-config "Type=HTTP,FullyQualifiedDomainName=$ALB_DNS,Port=80,ResourcePath=/" \
+>   --query 'HealthCheck.Id' --output text)
+> ```
+> Resultado esperado: `aws route53 get-health-check-status --health-check-id $HC_ID` mostra o status do health check (leva alguns minutos até virar `Success`, já que os checadores da AWS precisam completar a primeira rodada). Documentação: https://docs.aws.amazon.com/cli/latest/reference/route53/create-hosted-zone.html
+
 Com a hosted zone e o health check prontos, crie um registro com política de roteamento **Failover**, primário apontando para o `trilhashop-alb` (como alias, com "Evaluate target health" habilitado) e secundário apontando para `203.0.113.10` — um endereço do bloco `203.0.113.0/24`, reservado pela IANA especificamente para documentação e exemplos, usado aqui de propósito como placeholder: o TrilhaShop ainda não tem um segundo destino real para failover (isso muda no módulo 16, quando o site estático em S3 puder assumir esse papel).
 
 ![Registro DNS do Route 53 com política Failover, mostrando o registro primário (alias para o ALB) e o secundário (placeholder)](screenshots/11-projetando-para-uptime-network/07-route53-registro-failover.png)
 > `[PRINT]` Passo a passo para capturar: dentro da hosted zone, "Create record". Nome: `www`. Routing policy: "Failover". Criar o registro primário como alias para o `trilhashop-alb`, associado ao health check criado acima. Criar um segundo registro, mesmo nome, Failover record type "Secondary", apontando para `203.0.113.10`. Capturar a tela com os dois registros lado a lado na listagem da hosted zone.
+
+> `[CLI]` Registros de failover via CLI são enviados como um "change batch" JSON:
+> ```bash
+> cat > failover.json <<EOF
+> {
+>   "Changes": [
+>     {"Action": "CREATE", "ResourceRecordSet": {
+>       "Name": "www.trilhashop.click", "Type": "A", "SetIdentifier": "primario", "Failover": "PRIMARY",
+>       "AliasTarget": {"HostedZoneId": "$ALB_ZONE", "DNSName": "$ALB_DNS", "EvaluateTargetHealth": true},
+>       "HealthCheckId": "$HC_ID"
+>     }},
+>     {"Action": "CREATE", "ResourceRecordSet": {
+>       "Name": "www.trilhashop.click", "Type": "A", "SetIdentifier": "secundario", "Failover": "SECONDARY",
+>       "TTL": 60, "ResourceRecords": [{"Value": "203.0.113.10"}]
+>     }}
+>   ]
+> }
+> EOF
+> aws route53 change-resource-record-sets --hosted-zone-id $ZONE_ID --change-batch file://failover.json
+> ```
+> Resultado esperado: `aws route53 list-resource-record-sets --hosted-zone-id $ZONE_ID` mostra os dois registros `www.trilhashop.click`, um com `"Failover": "PRIMARY"` e outro `"SECONDARY"`. Documentação: https://docs.aws.amazon.com/cli/latest/reference/route53/change-resource-record-sets.html
 
 `[CUSTO]` Diferente do NAT Gateway e do ALB (cobrança por hora), a hosted zone e o health check do Route 53 cobram **um valor fixo mensal** — pausar entre sessões não reduz esse custo, porque ele não é proporcional ao tempo de uso dentro do mês. Se for parar de estudar por um período longo, a forma de evitar a cobrança é excluir a hosted zone e o health check (recriar depois leva menos de um minuto). Para sessões normais de estudo, é seguro deixá-los criados.
 

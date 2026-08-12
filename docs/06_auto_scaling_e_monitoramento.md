@@ -51,6 +51,17 @@ Nenhuma política de Auto Scaling funciona sem uma fonte confiável de métricas
 ![Console do CloudWatch mostrando um gráfico de métrica de utilização de CPU ao longo do tempo, com o painel de criação de alarme aberto ao lado](screenshots/06-auto-scaling-e-monitoramento/03-cloudwatch-metrica-e-alarme.png)
 > `[PRINT]` Passo a passo para capturar: abrir o CloudWatch direto em https://console.aws.amazon.com/cloudwatch/home?region=sa-east-1 (ou buscar "CloudWatch" na barra de busca do Console). No menu lateral, clicar em "All alarms" e depois em "Create alarm", ou em "Metrics" → "All metrics" para ver métricas disponíveis (podem estar vazias se não houver recursos ativos, mas a interface do assistente de criação de alarme é o que importa capturar). Avançar até a etapa em que a métrica é selecionada e o gráfico de série temporal aparece. Não é necessário concluir a criação do alarme.
 
+> `[CLI]`
+> ```bash
+> aws cloudwatch put-metric-alarm \
+>   --alarm-name trilhashop-catalogo-cpu-alta \
+>   --namespace AWS/EC2 --metric-name CPUUtilization \
+>   --dimensions Name=AutoScalingGroupName,Value=trilhashop-catalogo-asg \
+>   --statistic Average --period 300 --evaluation-periods 2 \
+>   --threshold 70 --comparison-operator GreaterThanThreshold
+> ```
+> Resultado esperado: `aws cloudwatch describe-alarms --alarm-names trilhashop-catalogo-cpu-alta` mostra o alarme criado, com `StateValue` como `INSUFFICIENT_DATA` até existirem instâncias reportando a métrica (o que só acontece a partir do módulo 9). Documentação: https://docs.aws.amazon.com/cli/latest/reference/cloudwatch/put-metric-alarm.html
+
 O CloudWatch é também onde você configuraria o *billing alarm* que já existe na sua conta desde a preparação inicial (seção "Antes do módulo 1" do índice) — aquele alarme nada mais é do que uma métrica de custo estimado sendo observada por um alarme do CloudWatch, o mesmo mecanismo que agora está sendo aplicado a métricas de infraestrutura.
 
 ## A diferença entre CloudWatch e CloudTrail
@@ -59,6 +70,12 @@ Um ponto de confusão recorrente, inclusive em prova, é misturar CloudWatch com
 
 ![Console do CloudTrail mostrando o Event history com uma lista de eventos de API recentes, incluindo usuário, nome do evento e horário](screenshots/06-auto-scaling-e-monitoramento/04-cloudtrail-event-history.png)
 > `[PRINT]` Passo a passo para capturar: abrir o CloudTrail direto em https://console.aws.amazon.com/cloudtrail/home?region=sa-east-1 (ou buscar "CloudTrail" na barra de busca do Console). Clicar em "Event history" no menu lateral. Capturar a tela mostrando a lista de eventos recentes da conta (chamadas de API já feitas durante os laboratórios anteriores desta trilha, como criação de recursos ou consultas ao IAM), com as colunas de nome do evento, usuário e horário visíveis.
+
+> `[CLI]`
+> ```bash
+> aws cloudtrail lookup-events --max-results 10
+> ```
+> Resultado esperado: uma lista de `Events`, cada um com `EventName`, `Username` e `EventTime` — os mesmos comandos `aws ec2 create-vpc`, `aws iam create-role` etc. que você rodou nos módulos anteriores aparecem aqui, confirmando que toda ação via CLI também fica auditada, exatamente como uma ação feita pelo Console. Documentação: https://docs.aws.amazon.com/cli/latest/reference/cloudtrail/lookup-events.html
 
 > `[TEORIA]` Para a prova: CloudWatch = monitoramento de performance e saúde (métricas, logs, alarmes). CloudTrail = auditoria de quem fez o quê (histórico de chamadas de API). Essa distinção volta a aparecer, de forma complementar, na Task 2.2 do domínio de segurança ("monitoring with CloudWatch; auditing with CloudTrail and AWS Config").
 
@@ -81,10 +98,44 @@ Agora a peça real: o Load Balancer e o Auto Scaling Group que vão sustentar o 
 ![Assistente de criação do Application Load Balancer trilhashop-alb, com as subnets públicas da trilhashop-vpc selecionadas e o trilhashop-web-sg associado](screenshots/06-auto-scaling-e-monitoramento/05-alb-trilhashop-configuracao.png)
 > `[PRINT]` Passo a passo para capturar: "EC2" → "Load Balancers" → "Create load balancer" → "Application Load Balancer". Nome: `trilhashop-alb`. VPC: `trilhashop-vpc`. Mapear as duas subnets **públicas** (`trilhashop-subnet-public1...`, `-public2...`). Security group: `trilhashop-web-sg` (criado no módulo 4). Criar um novo target group `trilhashop-catalogo-tg` (tipo instância, porta 80, mesma VPC) durante o mesmo fluxo. Capturar a tela com essa configuração preenchida antes de criar.
 
+> `[CLI]`
+> ```bash
+> TG_ARN=$(aws elbv2 create-target-group --name trilhashop-catalogo-tg \
+>   --protocol HTTP --port 80 --vpc-id $VPC_ID --target-type instance \
+>   --query 'TargetGroups[0].TargetGroupArn' --output text)
+>
+> ALB_ARN=$(aws elbv2 create-load-balancer --name trilhashop-alb \
+>   --subnets $PUB1 $PUB2 --security-groups $WEB_SG --type application \
+>   --query 'LoadBalancers[0].LoadBalancerArn' --output text)
+>
+> aws elbv2 create-listener --load-balancer-arn $ALB_ARN \
+>   --protocol HTTP --port 80 \
+>   --default-actions Type=forward,TargetGroupArn=$TG_ARN
+> ```
+> Resultado esperado: `aws elbv2 describe-load-balancers --names trilhashop-alb --query 'LoadBalancers[0].State'` mostra `{"Code": "active"}` depois de alguns minutos de provisionamento. Documentação: https://docs.aws.amazon.com/cli/latest/reference/elbv2/create-load-balancer.html
+
 Com o ALB criado, monte o launch template e o ASG que vão preencher esse target group:
 
 ![Auto Scaling Group trilhashop-catalogo-asg configurado, mostrando a associação com o target group trilhashop-catalogo-tg e as subnets privadas selecionadas](screenshots/06-auto-scaling-e-monitoramento/06-asg-trilhashop-configuracao.png)
 > `[PRINT]` Passo a passo para capturar: criar o launch template `trilhashop-catalogo-lt` (AMI Amazon Linux 2023, tipo `t2.micro` ou `t3.micro`, Security Group `trilhashop-app-sg` — **sem user data ainda**, isso vem no módulo 9). Depois, "Auto Scaling Groups" → "Create Auto Scaling group", usando esse launch template, na `trilhashop-vpc`, subnets **privadas** (`-private1...`, `-private2...`). Na etapa de load balancing, anexar ao target group `trilhashop-catalogo-tg` já criado. Configurar capacidade mínima 0, desejada 0, máxima 2 — deliberadamente **zero por enquanto**, porque o launch template ainda não tem nenhuma aplicação real para servir. Capturar a tela de revisão antes de criar.
+
+> `[CLI]` O launch template precisa de uma AMI válida — consulte a mais recente do Amazon Linux 2023 primeiro:
+> ```bash
+> AMI_ID=$(aws ec2 describe-images --owners amazon \
+>   --filters "Name=name,Values=al2023-ami-*-x86_64" "Name=state,Values=available" \
+>   --query 'sort_by(Images, &CreationDate)[-1].ImageId' --output text)
+>
+> aws ec2 create-launch-template --launch-template-name trilhashop-catalogo-lt \
+>   --launch-template-data "{\"ImageId\":\"$AMI_ID\",\"InstanceType\":\"t3.micro\",\"SecurityGroupIds\":[\"$APP_SG\"]}"
+>
+> aws autoscaling create-auto-scaling-group \
+>   --auto-scaling-group-name trilhashop-catalogo-asg \
+>   --launch-template LaunchTemplateName=trilhashop-catalogo-lt,Version='$Latest' \
+>   --min-size 0 --desired-capacity 0 --max-size 2 \
+>   --vpc-zone-identifier "$PRIV1,$PRIV2" \
+>   --target-group-arns $TG_ARN
+> ```
+> Resultado esperado: `aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names trilhashop-catalogo-asg --query 'AutoScalingGroups[0].[MinSize,DesiredCapacity,MaxSize]'` retorna `[0, 0, 2]` — o grupo existe, mas sem instância nenhuma ainda, exatamente como o módulo pede. Documentação: https://docs.aws.amazon.com/cli/latest/reference/autoscaling/create-auto-scaling-group.html
 
 Deixe a capacidade desejada em 0 até o módulo 9 — não há necessidade de pagar por instâncias rodando um sistema operacional vazio. O ALB, porém, já fica no ar (e já começa a cobrar por hora), servindo como a peça de rede que o módulo 9 vai popular de conteúdo real.
 

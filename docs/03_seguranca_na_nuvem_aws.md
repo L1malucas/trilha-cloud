@@ -70,12 +70,26 @@ O serviço que gerencia essas chaves de criptografia na AWS é o **AWS Key Manag
 ![Console do AWS KMS mostrando a lista de chaves de criptografia gerenciadas pela conta, com a chave padrão (AWS managed key) visível](screenshots/03-seguranca-na-nuvem-aws/04-kms-lista-de-chaves.png)
 > `[PRINT]` Passo a passo para capturar: abrir o KMS direto em https://console.aws.amazon.com/kms/home?region=sa-east-1 (ou buscar "KMS" na barra de busca do Console). No menu lateral, clicar em "AWS managed keys" (ou "Customer managed keys" se já existir alguma). Capturar a tela mostrando a lista de chaves, mesmo que sejam apenas as chaves gerenciadas automaticamente pela AWS para outros serviços.
 
+> `[CLI]`
+> ```bash
+> aws kms list-keys --region sa-east-1
+> aws kms list-aliases --region sa-east-1 --query "Aliases[?starts_with(AliasName, 'alias/aws/')].AliasName"
+> ```
+> Resultado esperado: `list-keys` lista os `KeyId` existentes na conta/região; o `list-aliases` filtrado mostra só os apelidos das chaves gerenciadas pela própria AWS (prefixo `alias/aws/`), o equivalente à aba "AWS managed keys" do Console. Documentação: https://docs.aws.amazon.com/cli/latest/reference/kms/list-keys.html
+
 ## Detectando e reagindo a ameaças
 
 Além de controlar acesso e criptografar dados, a AWS oferece um conjunto de serviços dedicados a monitorar continuamente sua conta em busca de comportamento suspeito. O **Amazon GuardDuty** analisa logs de rede, de acesso e de atividade de conta em busca de padrões que indiquem comprometimento — por exemplo, uma instância EC2 se comunicando com um endereço IP conhecido por hospedar malware. O **Amazon Inspector** varre suas instâncias EC2 e imagens de containers em busca de vulnerabilidades conhecidas de software. O **Amazon Macie** usa aprendizado de máquina para encontrar e classificar dados sensíveis (como informações pessoais) armazenados em buckets S3, ajudando a evitar exposição acidental. E o **AWS Security Hub** funciona como um painel central que agrega os achados de todos esses serviços (e de ferramentas de terceiros) num único lugar, dando uma visão consolidada da postura de segurança da conta.
 
 ![Painel do AWS Security Hub mostrando o resumo de achados de segurança agregados, com contadores por nível de severidade](screenshots/03-seguranca-na-nuvem-aws/05-security-hub-painel.png)
 > `[PRINT]` Passo a passo para capturar: abrir o Security Hub direto em https://console.aws.amazon.com/securityhub/home?region=sa-east-1 (ou buscar "Security Hub" na barra de busca do Console) (pode ser necessário clicar em "Go to Security Hub" ou habilitar o serviço na primeira vez, sem precisar concluir nenhuma configuração paga). Capturar a tela do resumo/dashboard, mostrando os cartões de contagem de achados por severidade, mesmo que estejam todos zerados por não haver histórico ainda.
+
+> `[CLI]` Depois de habilitado (`aws securityhub enable-security-hub --region sa-east-1`, uma única vez):
+> ```bash
+> aws securityhub get-findings --region sa-east-1 \
+>   --filters '{"SeverityLabel": [{"Value": "CRITICAL", "Comparison": "EQUALS"}]}'
+> ```
+> Resultado esperado: uma lista (possivelmente vazia, numa conta nova) de `Findings` — cada um com `Severity`, `Title` e o recurso afetado, o mesmo dado que os cartões do dashboard resumem visualmente. Documentação: https://docs.aws.amazon.com/cli/latest/reference/securityhub/get-findings.html
 
 `[APROFUNDAMENTO]` Dois serviços adicionais aparecem no radar de segurança em nível mais avançado: **AWS WAF** (Web Application Firewall), que filtra tráfego HTTP malicioso antes que ele chegue à sua aplicação, e **AWS Shield**, que protege contra ataques de negação de serviço (DDoS) — o Shield Standard vem incluído automaticamente para todo cliente AWS, sem custo adicional, enquanto o Shield Advanced é um plano pago com proteção e suporte reforçados. Para o Cloud Practitioner, basta reconhecer os nomes e o propósito geral; configurar regras de WAF é conteúdo de nível mais avançado.
 
@@ -123,6 +137,27 @@ O cenário: um estagiário de marketing precisa conseguir ver as imagens de prod
 
 Crie um usuário de teste descartável (`teste-estagiario`, sem console access, só para este exercício), anexe essa política a ele, e use o **IAM Policy Simulator** (ou tente de fato, se já tiver um bucket de teste qualquer) para confirmar que uma ação como `s3:DeleteObject` é negada e `s3:GetObject` é permitida. Ao terminar, exclua o usuário de teste e a política — este exercício não deixa nada persistente.
 
+> `[CLI]` O mesmo exercício, do início ao fim, sem abrir o Console:
+> ```bash
+> # salve a política acima como policy.json, depois:
+> aws iam create-policy --policy-name trilhashop-leitura-imagens-produto --policy-document file://policy.json
+> aws iam create-user --user-name teste-estagiario
+> aws iam attach-user-policy --user-name teste-estagiario \
+>   --policy-arn arn:aws:iam::<seu-account-id>:policy/trilhashop-leitura-imagens-produto
+>
+> # simular as duas ações sem executar nada de verdade:
+> aws iam simulate-principal-policy \
+>   --policy-source-arn arn:aws:iam::<seu-account-id>:user/teste-estagiario \
+>   --action-names s3:GetObject s3:DeleteObject \
+>   --resource-arns arn:aws:s3:::trilhashop-product-images/foto.jpg
+>
+> # limpeza:
+> aws iam detach-user-policy --user-name teste-estagiario --policy-arn arn:aws:iam::<seu-account-id>:policy/trilhashop-leitura-imagens-produto
+> aws iam delete-user --user-name teste-estagiario
+> aws iam delete-policy --policy-arn arn:aws:iam::<seu-account-id>:policy/trilhashop-leitura-imagens-produto
+> ```
+> Resultado esperado: no `simulate-principal-policy`, a linha de `s3:GetObject` volta com `"EvalDecision": "allowed"` e a de `s3:DeleteObject` com `"EvalDecision": "implicitDeny"` — a prova visual de que a política restrita funciona, sem precisar arriscar uma chamada real. Documentação: https://docs.aws.amazon.com/cli/latest/reference/iam/simulate-principal-policy.html
+
 `[ATENÇÃO]` Um erro comum ao escrever policies do zero é esquecer o segundo ARN (`.../*`) — sem ele, `s3:ListBucket` funciona mas `s3:GetObject` falha, porque um se aplica ao bucket como recurso e o outro aos objetos dentro dele. É uma pegadinha frequente tanto na prova quanto no uso real.
 
 ### Contribuição ao projeto integrador
@@ -132,12 +167,46 @@ Aqui nasce a identidade real do TrilhaShop dentro do IAM — grupo, usuário de 
 ![Console do IAM mostrando a criação do grupo trilhashop-operadores, na etapa de nomear o grupo](screenshots/03-seguranca-na-nuvem-aws/08-iam-criar-grupo-trilhashop.png)
 > `[PRINT]` Passo a passo para capturar: no IAM, "User groups" → "Create group". Nomear como `trilhashop-operadores`. Capturar a tela antes de concluir. Concluir a criação (sem anexar nenhuma policy ampla — este grupo existe para você adicionar usuários de projeto conforme precisar, com policies específicas, seguindo o mesmo princípio de menor privilégio da prática isolada acima).
 
+> `[CLI]`
+> ```bash
+> aws iam create-group --group-name trilhashop-operadores
+> ```
+> Resultado esperado: a resposta traz o `Group` criado, com `GroupId` e `Arn` preenchidos. Documentação: https://docs.aws.amazon.com/cli/latest/reference/iam/create-group.html
+
 Mais importante que o grupo são as duas **roles de serviço** que o TrilhaShop vai precisar — roles, não usuários, porque quem vai assumi-las são serviços da AWS, não pessoas:
 
 ![Console do IAM na criação de uma role, com "AWS service" selecionado como tipo de entidade confiável e EC2 escolhido como caso de uso](screenshots/03-seguranca-na-nuvem-aws/09-iam-criar-role-ec2.png)
 > `[PRINT]` Passo a passo para capturar: no IAM, "Roles" → "Create role". Selecionar "AWS service" como trusted entity type, e "EC2" como use case. Nomear como `trilhashop-ec2-role`. Não anexar nenhuma policy ainda (o módulo 9, quando as instâncias reais forem lançadas, volta aqui para anexar exatamente a permissão que elas precisarem — por exemplo, acesso de leitura ao bucket de imagens). Concluir a criação.
 
 Repita o mesmo processo criando uma segunda role, `trilhashop-lambda-role`, desta vez com "Lambda" como use case — ela vai ser assumida pela função de pedidos do módulo 14 e pela função de IA do módulo 15. Nenhuma dessas duas roles gera custo por existir — IAM é gratuito — então elas podem ficar criadas, vazias de permissão, até o módulo que efetivamente precisar delas.
+
+> `[CLI]` Uma role, diferente de um usuário, precisa de uma **trust policy** dizendo quem pode assumi-la — aqui, o próprio serviço EC2 ou Lambda:
+> ```bash
+> cat > trust-ec2.json <<'EOF'
+> {
+>   "Version": "2012-10-17",
+>   "Statement": [{
+>     "Effect": "Allow",
+>     "Principal": {"Service": "ec2.amazonaws.com"},
+>     "Action": "sts:AssumeRole"
+>   }]
+> }
+> EOF
+> aws iam create-role --role-name trilhashop-ec2-role --assume-role-policy-document file://trust-ec2.json
+>
+> cat > trust-lambda.json <<'EOF'
+> {
+>   "Version": "2012-10-17",
+>   "Statement": [{
+>     "Effect": "Allow",
+>     "Principal": {"Service": "lambda.amazonaws.com"},
+>     "Action": "sts:AssumeRole"
+>   }]
+> }
+> EOF
+> aws iam create-role --role-name trilhashop-lambda-role --assume-role-policy-document file://trust-lambda.json
+> ```
+> Resultado esperado: cada `create-role` retorna a role criada, com o `AssumeRolePolicyDocument` refletindo exatamente o trust policy enviado. Confirme com `aws iam list-roles --query "Roles[?starts_with(RoleName, 'trilhashop')].RoleName"`. Documentação: https://docs.aws.amazon.com/cli/latest/reference/iam/create-role.html
 
 `[CUSTO]` Nada neste módulo gera cobrança: usuários, grupos, roles e policies do IAM não têm custo. Se precisar pausar o projeto por um tempo, não há nada a fazer aqui — ver a tabela de pausa em `00_indice.md`.
 

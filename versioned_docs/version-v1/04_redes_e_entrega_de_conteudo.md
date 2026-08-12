@@ -56,12 +56,24 @@ Antes mesmo de o tráfego chegar à sua VPC, ele precisa saber para onde ir — 
 ![Console do Route 53 mostrando a tela de hosted zones, com o botão de criar uma nova zona hospedada](screenshots/04-redes-e-entrega-de-conteudo/04-route53-hosted-zones.png)
 > `[PRINT]` Passo a passo para capturar: abrir o Route 53 direto em https://console.aws.amazon.com/route53/v2/home (ou buscar "Route 53" na barra de busca do Console). Clicar em "Hosted zones" no menu lateral. Capturar a tela, mesmo que a lista esteja vazia (sem nenhum domínio configurado) — o importante é mostrar a interface e o botão "Create hosted zone".
 
+> `[CLI]`
+> ```bash
+> aws route53 list-hosted-zones
+> ```
+> Resultado esperado: uma lista (vazia numa conta nova) de `HostedZones`. O módulo 11 volta aqui com o comando de criação (`create-hosted-zone`) de verdade. Documentação: https://docs.aws.amazon.com/cli/latest/reference/route53/list-hosted-zones.html
+
 ## Aproximando conteúdo do usuário: CloudFront
 
 O módulo 2 já introduziu as Edge Locations como o nível mais numeroso e mais próximo do usuário na hierarquia de infraestrutura da AWS. O **Amazon CloudFront** é o serviço que efetivamente usa essa malha de Edge Locations: ele funciona como uma **CDN (Content Delivery Network)**, guardando cópias em cache de conteúdo (imagens, vídeos, arquivos estáticos de um site, e até respostas de API) fisicamente perto de onde o usuário está, em vez de fazer cada requisição viajar até a região onde o conteúdo original está armazenado. O resultado prático é menor latência percebida pelo usuário e menos carga direta na origem (o servidor ou bucket S3 real).
 
 ![Assistente de criação de uma distribuição CloudFront, com o campo de origem (origin) sendo configurado](screenshots/04-redes-e-entrega-de-conteudo/05-cloudfront-criar-distribuicao.png)
 > `[PRINT]` Passo a passo para capturar: abrir o CloudFront direto em https://console.aws.amazon.com/cloudfront/v4/home (ou buscar "CloudFront" na barra de busca do Console). Clicar em "Create distribution". Capturar a tela do assistente de criação, mostrando o campo "Origin domain" (onde se configuraria um bucket S3 ou outro endpoint como origem). Não é necessário concluir a criação da distribuição.
+
+> `[CLI]`
+> ```bash
+> aws cloudfront list-distributions
+> ```
+> Resultado esperado: `"Items": null` ou lista vazia numa conta nova — confirma que não há distribuição criada ainda. Criar uma distribuição real via CLI exige um arquivo de configuração JSON completo (origem, comportamento de cache, etc.) — o módulo 16 mostra esse passo por completo, quando a distribuição real do TrilhaShop é criada. Documentação: https://docs.aws.amazon.com/cli/latest/reference/cloudfront/list-distributions.html
 
 ## Conectando o mundo de fora: VPN e Direct Connect
 
@@ -99,6 +111,42 @@ Esta é a base física de todo o TrilhaShop dali em diante — vale fazer com ca
 
 Ao concluir, a AWS cria de uma vez: a VPC `trilhashop-vpc`, quatro subnets (`trilhashop-subnet-public1-sa-east-1a`, `-public2-sa-east-1b`, `-private1-sa-east-1a`, `-private2-sa-east-1b`), um Internet Gateway já anexado, um ou dois NAT Gateways, e as route tables já associadas corretamente (públicas apontando para o IGW, privadas apontando para o NAT Gateway) — o mesmo padrão que a prática isolada acima já mostrou em miniatura, agora na escala real do projeto.
 
+> `[CLI]` O assistente "VPC and more" é, por baixo, uma sequência de chamadas separadas — reproduzi-las uma a uma ajuda a entender exatamente o que o assistente está automatizando (aqui, com um único NAT Gateway, para manter o custo controlado):
+> ```bash
+> # 1. VPC
+> VPC_ID=$(aws ec2 create-vpc --cidr-block 10.0.0.0/16 \
+>   --tag-specifications 'ResourceType=vpc,Tags=[{Key=Name,Value=trilhashop-vpc}]' \
+>   --query 'Vpc.VpcId' --output text)
+>
+> # 2. Quatro subnets (2 públicas, 2 privadas, uma de cada por AZ)
+> PUB1=$(aws ec2 create-subnet --vpc-id $VPC_ID --cidr-block 10.0.0.0/24 --availability-zone sa-east-1a --query 'Subnet.SubnetId' --output text)
+> PUB2=$(aws ec2 create-subnet --vpc-id $VPC_ID --cidr-block 10.0.1.0/24 --availability-zone sa-east-1b --query 'Subnet.SubnetId' --output text)
+> PRIV1=$(aws ec2 create-subnet --vpc-id $VPC_ID --cidr-block 10.0.10.0/24 --availability-zone sa-east-1a --query 'Subnet.SubnetId' --output text)
+> PRIV2=$(aws ec2 create-subnet --vpc-id $VPC_ID --cidr-block 10.0.11.0/24 --availability-zone sa-east-1b --query 'Subnet.SubnetId' --output text)
+>
+> # 3. Internet Gateway
+> IGW_ID=$(aws ec2 create-internet-gateway --query 'InternetGateway.InternetGatewayId' --output text)
+> aws ec2 attach-internet-gateway --vpc-id $VPC_ID --internet-gateway-id $IGW_ID
+>
+> # 4. Route table publica -> IGW, associada as duas subnets publicas
+> RT_PUB=$(aws ec2 create-route-table --vpc-id $VPC_ID --query 'RouteTable.RouteTableId' --output text)
+> aws ec2 create-route --route-table-id $RT_PUB --destination-cidr-block 0.0.0.0/0 --gateway-id $IGW_ID
+> aws ec2 associate-route-table --route-table-id $RT_PUB --subnet-id $PUB1
+> aws ec2 associate-route-table --route-table-id $RT_PUB --subnet-id $PUB2
+>
+> # 5. NAT Gateway (precisa de um Elastic IP) numa subnet publica
+> EIP_ALLOC=$(aws ec2 allocate-address --domain vpc --query 'AllocationId' --output text)
+> NAT_ID=$(aws ec2 create-nat-gateway --subnet-id $PUB1 --allocation-id $EIP_ALLOC --query 'NatGateway.NatGatewayId' --output text)
+> aws ec2 wait nat-gateway-available --nat-gateway-ids $NAT_ID
+>
+> # 6. Route table privada -> NAT Gateway, associada as duas subnets privadas
+> RT_PRIV=$(aws ec2 create-route-table --vpc-id $VPC_ID --query 'RouteTable.RouteTableId' --output text)
+> aws ec2 create-route --route-table-id $RT_PRIV --destination-cidr-block 0.0.0.0/0 --nat-gateway-id $NAT_ID
+> aws ec2 associate-route-table --route-table-id $RT_PRIV --subnet-id $PRIV1
+> aws ec2 associate-route-table --route-table-id $RT_PRIV --subnet-id $PRIV2
+> ```
+> Resultado esperado: `aws ec2 describe-vpcs --vpc-ids $VPC_ID` mostra `State: available`; `aws ec2 describe-nat-gateways --filter Name=vpc-id,Values=$VPC_ID` mostra `State: available` depois do `wait`. Guarde os IDs (`$VPC_ID`, `$PUB1`, `$PUB2`, `$PRIV1`, `$PRIV2`) — os módulos seguintes vão precisar deles. Documentação: https://docs.aws.amazon.com/cli/latest/reference/ec2/create-vpc.html
+
 O último passo deste módulo é criar os três Security Groups que vão proteger as três camadas do TrilhaShop, já antecipando os módulos 6, 9, 10 e 13:
 
 ![Três Security Groups criados: trilhashop-web-sg, trilhashop-app-sg e trilhashop-db-sg, listados no console da VPC](screenshots/04-redes-e-entrega-de-conteudo/08-security-groups-tres-camadas.png)
@@ -109,6 +157,20 @@ O último passo deste módulo é criar os três Security Groups que vão protege
 > Capturar a tela com os três grupos listados lado a lado.
 
 Essa cadeia — internet só fala com `web-sg`, `web-sg` só fala com `app-sg`, `app-sg` só fala com `db-sg` — é o princípio do menor privilégio (módulo 3) aplicado à rede: nenhuma camada tem acesso direto a uma camada que não seja a imediatamente anterior.
+
+> `[CLI]`
+> ```bash
+> WEB_SG=$(aws ec2 create-security-group --group-name trilhashop-web-sg --description "Camada web" --vpc-id $VPC_ID --query 'GroupId' --output text)
+> aws ec2 authorize-security-group-ingress --group-id $WEB_SG --protocol tcp --port 80 --cidr 0.0.0.0/0
+> aws ec2 authorize-security-group-ingress --group-id $WEB_SG --protocol tcp --port 443 --cidr 0.0.0.0/0
+>
+> APP_SG=$(aws ec2 create-security-group --group-name trilhashop-app-sg --description "Camada app" --vpc-id $VPC_ID --query 'GroupId' --output text)
+> aws ec2 authorize-security-group-ingress --group-id $APP_SG --protocol tcp --port 8080 --source-group $WEB_SG
+>
+> DB_SG=$(aws ec2 create-security-group --group-name trilhashop-db-sg --description "Camada banco" --vpc-id $VPC_ID --query 'GroupId' --output text)
+> aws ec2 authorize-security-group-ingress --group-id $DB_SG --protocol tcp --port 5432 --source-group $APP_SG
+> ```
+> Note o parâmetro `--source-group` (não `--cidr`) nas duas últimas regras — é assim que a CLI expressa "a origem permitida é outro Security Group", o mesmo mecanismo que o Console oferece ao digitar o nome de um SG no campo de origem. Resultado esperado: `aws ec2 describe-security-groups --group-ids $WEB_SG $APP_SG $DB_SG --query 'SecurityGroups[].[GroupName,IpPermissions]'` mostra as três regras encadeadas. Documentação: https://docs.aws.amazon.com/cli/latest/reference/ec2/authorize-security-group-ingress.html
 
 `[CUSTO]` A partir daqui, o TrilhaShop tem seu primeiro recurso que cobra por hora: o(s) NAT Gateway(s). Ver a tabela de pausa em `00_indice.md` — excluir o NAT Gateway entre sessões de estudo mais longas é o passo de manutenção mais importante desta trilha a partir de agora. VPC, subnets, route tables, Internet Gateway e Security Groups não custam nada parados.
 

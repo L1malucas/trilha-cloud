@@ -36,6 +36,14 @@ A forma como você paga por uma instância EC2 é, em si, uma decisão de arquit
 ![Console do EC2 mostrando a seção "Reserved Instances" ou "Savings Plans", com o painel de recomendações e a comparação de economia potencial frente ao modelo On-Demand](screenshots/09-amazon-ec2/02-reserved-savings-plans.png)
 > `[PRINT]` Passo a passo para capturar: dentro do EC2, no menu lateral em "Purchasing and reservation types", clicar em "Reserved Instances" ou navegar até "Savings Plans" no Console (pode aparecer como serviço separado na busca). Capturar a tela mostrando a interface de comparação/compra, mesmo sem concluir uma compra real.
 
+> `[CLI]` Consultar ofertas de Reserved Instances disponíveis, sem comprar nada:
+> ```bash
+> aws ec2 describe-reserved-instances-offerings \
+>   --instance-type t3.micro --product-description "Linux/UNIX" \
+>   --query 'ReservedInstancesOfferings[0].[Duration,FixedPrice,UsagePrice]'
+> ```
+> Resultado esperado: `Duration` em segundos (31536000 = 1 ano, ou 94608000 = 3 anos), `FixedPrice` (o valor pago antecipado, se houver) e `UsagePrice` (custo por hora restante) — os mesmos números que a comparação do Console mostra. Documentação: https://docs.aws.amazon.com/cli/latest/reference/ec2/describe-reserved-instances-offerings.html
+
 Existem ainda dois modelos de nicho: **Dedicated Hosts** e **Dedicated Instances**, ambos entregando hardware físico dedicado exclusivamente à sua conta (sem compartilhar o servidor físico com outros clientes da AWS) — usados quando exigências de licenciamento de software ou de conformidade regulatória exigem isolamento físico completo, não apenas isolamento lógico. E **Capacity Reservations** garantem capacidade disponível numa AZ específica, independentemente do modelo de compra usado para pagar por ela.
 
 > `[TEORIA]` Para a prova: essa tabela de modelos de compra é uma das mais cobradas do domínio de billing. Memorize o eixo central — On-Demand (flexível, mais caro), Reserved/Savings Plans (compromisso de tempo, desconto grande, para carga previsível), Spot (mais barato, pode ser interrompido, para carga tolerante a falha), Dedicated Hosts/Instances (isolamento físico, para licenciamento/compliance).
@@ -66,6 +74,31 @@ Este é o primeiro laboratório da trilha que efetivamente cria um recurso de co
 > ```
 > Capturar a tela de revisão final do assistente (painel lateral "Summary"), antes de clicar em "Launch instance".
 
+> `[CLI]`
+> ```bash
+> AMI_ID=$(aws ec2 describe-images --owners amazon \
+>   --filters "Name=name,Values=al2023-ami-*-x86_64" "Name=state,Values=available" \
+>   --query 'sort_by(Images, &CreationDate)[-1].ImageId' --output text)
+>
+> cat > userdata.sh <<'EOF'
+> #!/bin/bash
+> yum update -y
+> yum install -y httpd
+> systemctl start httpd
+> systemctl enable httpd
+> echo "<h1>Instancia lancada pela Trilha-Cloud-AWS, modulo 09</h1>" > /var/www/html/index.html
+> EOF
+>
+> INSTANCE_ID=$(aws ec2 run-instances \
+>   --image-id $AMI_ID --instance-type t3.micro \
+>   --user-data file://userdata.sh \
+>   --query 'Instances[0].InstanceId' --output text)
+>
+> aws ec2 wait instance-running --instance-ids $INSTANCE_ID
+> aws ec2 describe-instances --instance-ids $INSTANCE_ID --query 'Reservations[0].Instances[0].PublicIpAddress'
+> ```
+> Resultado esperado: o `describe-instances` final imprime um IP público — cole em `http://<esse-ip>` no navegador, exatamente como no fluxo pelo Console. Sem `--key-name` e sem `--security-group-ids` explícitos, a instância usa a VPC/Security Group padrão da conta e não permite SSH — para este teste (só a página web), não é necessário. Documentação: https://docs.aws.amazon.com/cli/latest/reference/ec2/run-instances.html
+
 Depois de lançar, aguarde a instância passar para o estado `running` e o status check ficar `2/2 checks passed` — isso costuma levar de um a três minutos. O script de user data instala e inicia um servidor web simples (Apache/`httpd`) automaticamente, sem que você precise conectar na instância para fazer isso manualmente.
 
 ![Lista de instâncias EC2 mostrando a instância recém-criada com estado "Running" e os status checks "2/2 checks passed"](screenshots/09-amazon-ec2/04-instancia-running-status-checks.png)
@@ -76,6 +109,13 @@ Para confirmar que o servidor web está realmente respondendo, copie o **IPv4 p�
 `[ATENÇÃO]` Liberar a porta 80 (ou qualquer porta) para `0.0.0.0/0` significa liberar para toda a internet, não só para você. Para este laboratório específico, isso é intencional (queremos ver a página carregando de qualquer lugar), mas é exatamente o tipo de configuração que deve ser revisitada com cuidado antes de ir para produção — a prova gosta de testar cenários em que uma porta foi deixada aberta além do necessário, violando o princípio do menor privilégio do módulo 3.
 
 **Encerrando esta prática**: `[CUSTO]` Uma instância `t2.micro` ou `t3.micro` está coberta pelo Free Tier até um limite de 750 horas por mês (o suficiente para deixar uma instância rodando o mês inteiro, mas não duas simultaneamente pelo mesmo período) — ainda assim, o hábito correto é nunca deixar uma instância de laboratório rodando além do necessário. Para encerrar: selecione a instância na lista, clique em "Instance state" → "Terminate instance". Terminar (diferente de apenas "parar"/*stop*) destrói a instância e, por padrão, o volume EBS raiz associado a ela — não há cobrança contínua depois disso.
+
+> `[CLI]`
+> ```bash
+> aws ec2 terminate-instances --instance-ids $INSTANCE_ID
+> aws ec2 wait instance-terminated --instance-ids $INSTANCE_ID
+> ```
+> Resultado esperado: o `wait` retorna sem erro; `aws ec2 describe-instances --instance-ids $INSTANCE_ID --query 'Reservations[0].Instances[0].State.Name'` mostra `"terminated"`. Documentação: https://docs.aws.amazon.com/cli/latest/reference/ec2/terminate-instances.html
 
 ### Contribuição ao projeto integrador
 
@@ -96,7 +136,25 @@ HTML
 ![Launch template trilhashop-catalogo-lt sendo editado, com uma nova versão criada incluindo o user data do catálogo](screenshots/09-amazon-ec2/05-launch-template-trilhashop-user-data.png)
 > `[PRINT]` Passo a passo para capturar: "EC2" → "Launch Templates" → `trilhashop-catalogo-lt` → "Actions" → "Modify template (create new version)". Colar o user data acima em "Advanced details". Capturar a tela antes de salvar a nova versão. Salvar, e marcar a nova versão como "Default version" do launch template.
 
+> `[CLI]`
+> ```bash
+> aws ec2 create-launch-template-version \
+>   --launch-template-name trilhashop-catalogo-lt \
+>   --source-version 1 \
+>   --launch-template-data "{\"UserData\":\"$(base64 -i userdata-catalogo.sh)\"}"
+>
+> aws ec2 modify-launch-template --launch-template-name trilhashop-catalogo-lt --default-version '$Latest'
+> ```
+> (salve o user data do catálogo, mostrado acima, em `userdata-catalogo.sh` antes de rodar). Resultado esperado: `aws ec2 describe-launch-template-versions --launch-template-name trilhashop-catalogo-lt --query 'LaunchTemplateVersions[?DefaultVersion].VersionNumber'` mostra a nova versão como padrão. Documentação: https://docs.aws.amazon.com/cli/latest/reference/ec2/create-launch-template-version.html
+
 Com o template atualizado, volte ao Auto Scaling Group `trilhashop-catalogo-asg` (módulo 6) e mude a capacidade desejada de 0 para 2 — desta vez, com um propósito real: essas instâncias vão ficar registradas no target group do `trilhashop-alb` e responder de verdade.
+
+> `[CLI]`
+> ```bash
+> aws autoscaling update-auto-scaling-group --auto-scaling-group-name trilhashop-catalogo-asg --desired-capacity 2
+> aws elbv2 describe-target-health --target-group-arn $TG_ARN --query 'TargetHealthDescriptions[].TargetHealth.State'
+> ```
+> Resultado esperado: depois de alguns minutos (tempo de boot + health check), a segunda consulta mostra `["healthy", "healthy"]`. Documentação: https://docs.aws.amazon.com/cli/latest/reference/autoscaling/update-auto-scaling-group.html
 
 ![Página do target group trilhashop-catalogo-tg mostrando duas instâncias registradas com status "healthy"](screenshots/09-amazon-ec2/06-target-group-instancias-healthy.png)
 > `[PRINT]` Passo a passo para capturar: "EC2" → "Target Groups" → `trilhashop-catalogo-tg` → aba "Targets". Aguardar as duas instâncias lançadas pelo ASG aparecerem com status "healthy" (pode levar alguns minutos, incluindo o tempo do health check). Capturar a tela com as duas instâncias e o status.

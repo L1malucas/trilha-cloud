@@ -52,6 +52,12 @@ Enquanto o Well-Architected Tool depende de você responder perguntas sobre sua 
 ![Painel do AWS Trusted Advisor mostrando os cartões de resumo por categoria (Cost Optimization, Performance, Security, Fault Tolerance, Service Limits) com contadores de recomendações](screenshots/05-arquitetura-de-nuvem/02-trusted-advisor-painel.png)
 > `[PRINT]` Passo a passo para capturar: abrir o Trusted Advisor direto em https://console.aws.amazon.com/trustedadvisor/home?region=sa-east-1 (ou buscar "Trusted Advisor" na barra de busca do Console). Capturar a tela do painel principal, mostrando os cartões de categoria com contadores (mesmo que a maioria esteja em branco ou com poucos itens, por a conta ser nova e ter poucos recursos criados).
 
+> `[CLI]`
+> ```bash
+> aws support describe-trusted-advisor-checks --language en
+> ```
+> `[ATENÇÃO]` Esse comando (e o Trusted Advisor completo via API) só funciona em contas com plano de suporte **Business, Enterprise On-Ramp ou Enterprise** — numa conta Basic ou Developer, ele retorna `SubscriptionRequiredException`. É a mesma limitação que aparece no Console, só que a CLI expõe o erro de forma mais direta em vez de simplesmente esconder as checagens bloqueadas. Documentação: https://docs.aws.amazon.com/cli/latest/reference/support/describe-trusted-advisor-checks.html
+
 > `[TEORIA]` Para a prova: as cinco categorias de checagem do Trusted Advisor são Cost Optimization, Performance, Security, Fault Tolerance e Service Limits. Vale notar que o nível de acesso completo às checagens do Trusted Advisor depende do plano de suporte da conta — o módulo 16 volta a esse ponto ao tratar dos planos de suporte da AWS.
 
 ## Princípios de design que atravessam todos os pilares
@@ -88,6 +94,20 @@ Agora sim, contra o TrilhaShop de verdade. Volte ao Well-Architected Tool e defi
 
 ![Well-Architected Tool com a workload "TrilhaShop" definida, campo de descrição preenchido mencionando a VPC criada no módulo 4](screenshots/05-arquitetura-de-nuvem/03-well-architected-workload-trilhashop.png)
 > `[PRINT]` Passo a passo para capturar: "Well-Architected Tool" → "Define workload". Nome: `TrilhaShop`. Região: São Paulo. Descrição: mencionar que, até este ponto, o projeto tem uma VPC com subnets públicas/privadas em 2 AZs e três Security Groups em cadeia (o que foi construído no módulo 4). Capturar a tela preenchida antes de salvar.
+
+> `[CLI]`
+> ```bash
+> WORKLOAD_ID=$(aws wellarchitected create-workload \
+>   --workload-name "TrilhaShop" \
+>   --description "VPC com subnets publicas/privadas em 2 AZs e tres Security Groups em cadeia (modulo 4)" \
+>   --environment PRODUCTION \
+>   --lenses wellarchitected \
+>   --review-owner "voce@exemplo.com" \
+>   --aws-regions sa-east-1 \
+>   --query 'Workload.WorkloadId' --output text)
+> echo $WORKLOAD_ID
+> ```
+> Resultado esperado: um `WorkloadId` novo impresso no terminal — guarde-o, os módulos 9, 13 e 16 vão reabrir essa mesma revisão. Responder o questionário pilar a pilar não tem um comando único de CLI equivalente ao formulário do Console (é feito via `aws wellarchitected update-answer`, pergunta por pergunta) — para esta trilha, vale mais a pena responder pelo Console mesmo, e usar a CLI só para criar/consultar o workload. Documentação: https://docs.aws.amazon.com/cli/latest/reference/wellarchitected/create-workload.html
 
 Responda ao menos o questionário do pilar **Confiabilidade** e do pilar **Segurança** contra o que já existe — a resposta honesta, neste ponto da trilha, vai apontar riscos reais (por exemplo, "nenhum recurso de computação ainda existe, então não há redundância de aplicação a avaliar" ou "MFA está ativo no root, mas ainda não há CloudTrail configurado explicitamente para auditoria"). Isso é esperado: o TrilhaShop está no início, e o valor do exercício é justamente ver a lista de riscos diminuir a cada módulo que você revisitar esta mesma revisão. Guarde a revisão salva no Console — os módulos 9, 13 e 16 vão voltar a ela.
 

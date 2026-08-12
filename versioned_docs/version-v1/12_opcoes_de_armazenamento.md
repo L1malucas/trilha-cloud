@@ -29,10 +29,24 @@ O **Amazon S3 (Simple Storage Service)** organiza dados em **buckets** — cont�
 ![Console do S3 na tela de criação de um bucket, mostrando o campo de nome (com aviso de unicidade global) e a região selecionada](screenshots/12-opcoes-de-armazenamento/01-s3-criar-bucket.png)
 > `[PRINT]` Passo a passo para capturar: abrir o S3 direto em https://console.aws.amazon.com/s3/home?region=sa-east-1 (ou buscar "S3" na barra de busca do Console). Clicar em "Create bucket". Preencher um nome único (por exemplo, `trilha-cloud-aws-lab12-` seguido de números aleatórios) com a região São Paulo selecionada. Capturar a tela mostrando o campo de nome preenchido e a seção de configuração de acesso público (que deve permanecer bloqueada por padrão — "Block all public access" marcado). Concluir a criação do bucket.
 
+> `[CLI]` Quem preferir o terminal cria o bucket com um único comando:
+> ```bash
+> aws s3 mb s3://trilha-cloud-aws-lab12-$RANDOM --region sa-east-1
+> ```
+> Resultado esperado: a saída mostra `make_bucket: trilha-cloud-aws-lab12-<número>`. Documentação: https://docs.aws.amazon.com/cli/latest/reference/s3/mb.html
+
 Depois de criado o bucket, envie um arquivo pequeno qualquer (uma imagem ou um `.txt` simples) para dentro dele.
 
 ![Console do S3 dentro do bucket criado, mostrando o objeto recém-enviado na listagem, com colunas de tamanho e data de modificação](screenshots/12-opcoes-de-armazenamento/02-s3-objeto-enviado.png)
 > `[PRINT]` Passo a passo para capturar: dentro do bucket recém-criado, clicar em "Upload", adicionar um arquivo qualquer do computador, e concluir o upload. Capturar a tela da listagem do bucket mostrando o objeto enviado, com as colunas de tamanho e data de última modificação visíveis.
+
+> `[CLI]` Envio de um arquivo local para o bucket:
+> ```bash
+> echo "trilha aws cloud practitioner" > /tmp/lab12.txt
+> aws s3 cp /tmp/lab12.txt s3://trilha-cloud-aws-lab12-<número>/lab12.txt
+> aws s3 ls s3://trilha-cloud-aws-lab12-<número>/
+> ```
+> Resultado esperado: `aws s3 ls` lista `lab12.txt` com tamanho e data. Documentação: https://docs.aws.amazon.com/cli/latest/reference/s3/cp.html
 
 ## Classes de armazenamento: a mesma durabilidade, custos muito diferentes
 
@@ -47,12 +61,50 @@ Por padrão, se você subir um novo arquivo com a mesma chave de um já existent
 ![Configuração de versionamento de um bucket S3 ativada, na aba "Properties", com a listagem de múltiplas versões de um mesmo objeto visível](screenshots/12-opcoes-de-armazenamento/03-s3-versionamento-ativado.png)
 > `[PRINT]` Passo a passo para capturar: dentro do bucket criado, clicar na aba "Properties", localizar a seção "Bucket Versioning" e clicar em "Edit" para ativar ("Enable"). Depois de ativado, subir uma nova versão do mesmo arquivo enviado anteriormente (mesmo nome, conteúdo levemente diferente). Voltar à listagem de objetos, clicar em "Show versions" (ou equivalente) e capturar a tela mostrando as duas versões do mesmo objeto, cada uma com seu próprio Version ID.
 
+> `[CLI]` Ativação de versionamento e envio de uma segunda versão do mesmo objeto:
+> ```bash
+> aws s3api put-bucket-versioning \
+>   --bucket trilha-cloud-aws-lab12-<número> \
+>   --versioning-configuration Status=Enabled
+>
+> echo "trilha aws cloud practitioner - v2" > /tmp/lab12.txt
+> aws s3 cp /tmp/lab12.txt s3://trilha-cloud-aws-lab12-<número>/lab12.txt
+>
+> aws s3api list-object-versions --bucket trilha-cloud-aws-lab12-<número>
+> ```
+> Resultado esperado: `list-object-versions` mostra duas entradas para `lab12.txt`, cada uma com seu próprio `VersionId`. Documentação: https://docs.aws.amazon.com/cli/latest/reference/s3api/put-bucket-versioning.html
+
 ## Lifecycle policies: automatizando a transição entre classes
 
 Configurar manualmente quando cada objeto deve mudar de classe de armazenamento (ou ser excluído) não escala para milhões de arquivos. Uma **lifecycle policy** automatiza isso: você define regras como "mover objetos para Standard-IA depois de 30 dias sem acesso" ou "excluir objetos depois de 365 dias", e o S3 aplica essas transições automaticamente, sem intervenção manual contínua.
 
 ![Console do S3 na criação de uma regra de lifecycle, mostrando as transições de classe configuráveis por número de dias](screenshots/12-opcoes-de-armazenamento/04-s3-lifecycle-rule.png)
 > `[PRINT]` Passo a passo para capturar: dentro do bucket, clicar na aba "Management" e depois em "Create lifecycle rule". Dar um nome à regra, aplicar a todos os objetos do bucket, e na seção de ações, marcar "Move current versions of objects between storage classes" configurando uma transição (por exemplo, para Standard-IA após 30 dias). Capturar a tela mostrando essa configuração antes de salvar. Pode concluir a criação da regra — ela não gera custo por si só, só afeta objetos no futuro.
+
+> `[CLI]` A mesma regra de lifecycle, via um arquivo JSON de configuração:
+> ```bash
+> cat > /tmp/lifecycle.json <<'EOF'
+> {
+>   "Rules": [
+>     {
+>       "ID": "transicao-standard-ia-30-dias",
+>       "Status": "Enabled",
+>       "Filter": {},
+>       "Transitions": [
+>         { "Days": 30, "StorageClass": "STANDARD_IA" }
+>       ]
+>     }
+>   ]
+> }
+> EOF
+>
+> aws s3api put-bucket-lifecycle-configuration \
+>   --bucket trilha-cloud-aws-lab12-<número> \
+>   --lifecycle-configuration file:///tmp/lifecycle.json
+>
+> aws s3api get-bucket-lifecycle-configuration --bucket trilha-cloud-aws-lab12-<número>
+> ```
+> Resultado esperado: `get-bucket-lifecycle-configuration` devolve a regra `transicao-standard-ia-30-dias` com `Status: Enabled`. Documentação: https://docs.aws.amazon.com/cli/latest/reference/s3api/put-bucket-lifecycle-configuration.html
 
 > `[TEORIA]` Para a prova: lifecycle policies automatizam transição de classe e exclusão de objetos por tempo decorrido. É a ferramenta padrão para otimização de custo de armazenamento de longo prazo sem esforço manual contínuo — conecta diretamente ao pilar de otimização de custos do módulo 5.
 
@@ -71,6 +123,13 @@ O **AWS Backup** centraliza e automatiza a política de backup de múltiplos ser
 ![Console do AWS Backup mostrando a tela de criação de um backup plan, com a frequência de backup e os serviços de origem selecionáveis](screenshots/12-opcoes-de-armazenamento/05-aws-backup-plan.png)
 > `[PRINT]` Passo a passo para capturar: abrir o AWS Backup direto em https://console.aws.amazon.com/backup/home?region=sa-east-1 (ou buscar "Backup" na barra de busca do Console). Clicar em "Create Backup plan". Capturar a tela do assistente mostrando as opções de frequência de backup e período de retenção. Não é necessário concluir a criação de um plano real.
 
+> `[CLI]` Listagem dos planos de backup existentes na conta (sem criar nenhum novo, já que este módulo não exige um plano real):
+> ```bash
+> aws backup list-backup-plans --region sa-east-1
+> aws backup list-backup-vaults --region sa-east-1
+> ```
+> Resultado esperado: `list-backup-vaults` mostra ao menos o vault `Default`, criado automaticamente pela AWS na primeira vez que o serviço é habilitado na conta. Documentação: https://docs.aws.amazon.com/cli/latest/reference/backup/list-backup-plans.html
+
 ## Práticas
 
 ### Prática isolada
@@ -83,6 +142,19 @@ O TrilhaShop ganha seu bucket real de imagens de produto — o mesmo que a polí
 
 ![Console do S3 criando o bucket trilhashop-product-images, com versionamento habilitado já na criação](screenshots/12-opcoes-de-armazenamento/06-s3-bucket-trilhashop-product-images.png)
 > `[PRINT]` Passo a passo para capturar: "S3" → "Create bucket". Nome: `trilhashop-product-images` (se já estiver em uso globalmente por outra conta, usar um sufixo como `trilhashop-product-images-<suas-iniciais>`). Região: São Paulo. Na seção "Bucket Versioning", selecionar "Enable" já nesta tela (diferente do bucket de prática, que ativou depois). Manter "Block all public access" marcado — mesmo sendo imagens de produto, o acesso público vai ser mediado pelo CloudFront (módulo 4/16), não pelo bucket diretamente. Concluir a criação.
+
+> `[CLI]` Criação do bucket do TrilhaShop já com versionamento habilitado:
+> ```bash
+> aws s3api create-bucket \
+>   --bucket trilhashop-product-images \
+>   --region sa-east-1 \
+>   --create-bucket-configuration LocationConstraint=sa-east-1
+>
+> aws s3api put-bucket-versioning \
+>   --bucket trilhashop-product-images \
+>   --versioning-configuration Status=Enabled
+> ```
+> Resultado esperado: `aws s3api get-bucket-versioning --bucket trilhashop-product-images` retorna `"Status": "Enabled"`. Documentação: https://docs.aws.amazon.com/cli/latest/reference/s3api/create-bucket.html
 
 Configure uma lifecycle rule transicionando imagens para **Standard-IA** depois de 90 dias (fotos de produtos antigos, fora de catálogo ativo, são acessadas com pouca frequência, mas ainda podem ser consultadas em pedidos históricos). Por fim, volte à política `trilhashop-leitura-imagens-produto` escrita no módulo 3 e confirme que o nome do bucket nela bate exatamente com o bucket real recém-criado — se você usou um sufixo diferente por causa de unicidade global, edite a política para refletir o nome real.
 

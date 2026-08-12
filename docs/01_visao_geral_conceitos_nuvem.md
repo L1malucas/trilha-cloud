@@ -35,6 +35,15 @@ A melhor forma de entender "pagamento por uso" não é ler a definição — é 
 ![Painel do AWS Billing and Cost Management mostrando o resumo de custos do mês e a previsão de fatura](screenshots/01-visao-geral-conceitos-nuvem/01-billing-dashboard.png)
 > `[PRINT]` Passo a passo para capturar: logado no AWS Management Console com o usuário IAM administrativo, clicar no nome da conta no canto superior direito e selecionar "Billing and Cost Management" (ou buscar "Billing" na barra de busca do Console). Capturar a tela inicial do painel, mostrando o card de "Custo total do mês até agora" (ou equivalente em português) e o gráfico de tendência de gastos — mesmo que os valores estejam zerados por não haver recursos criados ainda.
 
+> `[CLI]` O equivalente em texto ao gráfico de gastos do mês (exige o Cost Explorer já habilitado — módulo 16 mostra como):
+> ```bash
+> aws ce get-cost-and-usage \
+>   --time-period Start=2026-08-01,End=2026-08-31 \
+>   --granularity MONTHLY \
+>   --metrics "UnblendedCost"
+> ```
+> Resultado esperado: um JSON com `ResultsByTime`, mostrando o valor total gasto no período — o mesmo número que o card "Custo total do mês até agora" mostra no Console. Documentação: https://docs.aws.amazon.com/cli/latest/reference/ce/get-cost-and-usage.html
+
 Repare que esse painel existe independentemente de você já ter criado algo: ele é a prova de que a AWS mede consumo antes mesmo de você gerar consumo. Esse é o "medidor" físico da virada econômica que a próxima seção explica.
 
 ## De CAPEX para OPEX: a virada que financia tudo
@@ -73,6 +82,12 @@ Antes de qualquer laboratório desta trilha te pedir para criar um recurso de ve
 ![Painel do AWS Free Tier mostrando a lista de serviços cobertos e o percentual de uso do limite gratuito mensal](screenshots/01-visao-geral-conceitos-nuvem/03-free-tier-dashboard.png)
 > `[PRINT]` Passo a passo para capturar: dentro de "Billing and Cost Management", no menu lateral esquerdo clicar em "AWS Free Tier" (ou buscar "Free Tier" na barra de busca do Console). Capturar a tela mostrando a tabela de serviços com colunas de limite gratuito, uso atual e previsão de uso — mesmo que todos os valores estejam em 0% de uso.
 
+> `[CLI]` A mesma informação, sem abrir o Console:
+> ```bash
+> aws freetier get-free-tier-usage --region us-east-1
+> ```
+> Resultado esperado: uma lista JSON de objetos `freeTierUsages`, um por serviço coberto, com `usage`, `limit` e `unit` — é o mesmo dado que a tabela do Console mostra, em formato bruto. Documentação: https://docs.aws.amazon.com/cli/latest/reference/freetier/get-free-tier-usage.html
+
 Esse painel vai ser sua referência de segurança em todos os laboratórios práticos futuros desta trilha: sempre que um módulo pedir para criar um recurso, o hábito certo é checar aqui depois, não só confiar na memória.
 
 ## Modelos de implantação: onde a infraestrutura mora
@@ -107,6 +122,20 @@ Toda decisão de arquitetura em nuvem envolve trade-offs. Para dar um vocabulár
 
 ![AWS Well-Architected Tool mostrando a tela de criação de uma revisão de workload, com os seis pilares listados](screenshots/01-visao-geral-conceitos-nuvem/04-well-architected-tool-pilares.png)
 > `[PRINT]` Passo a passo para capturar: abrir o Well-Architected Tool direto em https://console.aws.amazon.com/wellarchitected/home?region=sa-east-1 (ou buscar "Well-Architected Tool" na barra de busca do Console). Clicar em "Define workload" (ou equivalente) para iniciar a criação de uma revisão — sem precisar concluir o cadastro. Capturar a tela em que os seis pilares aparecem listados (Excelência Operacional, Segurança, Confiabilidade, Eficiência de Performance, Otimização de Custos, Sustentabilidade), geralmente visível ao avançar para a etapa de seleção de pilares ou no painel de navegação lateral.
+
+> `[CLI]` Criar (e depois listar) um workload sem passar pelo assistente visual:
+> ```bash
+> aws wellarchitected create-workload \
+>   --workload-name "laboratorio-modulo-01" \
+>   --description "Workload de teste do modulo 01" \
+>   --environment PREPRODUCTION \
+>   --lenses wellarchitected \
+>   --review-owner "voce@exemplo.com" \
+>   --aws-regions sa-east-1
+>
+> aws wellarchitected list-workloads
+> ```
+> Resultado esperado: `create-workload` retorna um `WorkloadId`; `list-workloads` mostra esse workload na lista. Os seis pilares em si não têm um "get" via CLI isolado — eles são fixos no serviço e aparecem ao consultar as respostas de uma lens com `aws wellarchitected list-lens-review-improvements --workload-id <id> --lens-alias wellarchitected`. Documentação: https://docs.aws.amazon.com/cli/latest/reference/wellarchitected/create-workload.html
 
 > `[TEORIA]` Para a prova: os seis pilares são excelência operacional, segurança, confiabilidade, eficiência de performance, otimização de custos e sustentabilidade. Vale decorar os seis nomes agora — o módulo 5 explica o que cada um significa na prática.
 
