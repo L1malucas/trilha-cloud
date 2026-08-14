@@ -72,18 +72,18 @@ decisão avalia cada um, e assim que a decisão encontra um divisor, o algoritmo
 ## `[ATENÇÃO]` Proibido usar métodos embutidos da linguagem
 
 Nos exercícios deste módulo (e nas apostilas de apoio), **é proibido usar métodos ou funções
-prontas da linguagem que já resolvem o problema por você** — por exemplo, usar `std::sort()` do
-C++ pra ordenar uma lista, ou `std::find()` pra buscar um elemento. O objetivo do exercício não é
-ordenar uma lista (a biblioteca padrão já faz isso em uma linha) — é entender e implementar
-**você mesmo** o algoritmo por trás disso.
+prontas da linguagem que já resolvem o problema por você** — por exemplo, usar `std::find()` do
+C++ pra buscar um elemento numa lista, ou `std::max_element()` pra achar o maior valor. O
+objetivo do exercício não é buscar ou comparar valores usando uma função pronta da biblioteca
+padrão — é entender e implementar **você mesmo** o algoritmo por trás disso.
 
 O que **não** fazer:
 ```cpp
-std::sort(vetor.begin(), vetor.end());  // resolve o problema sem ensinar nada sobre o algoritmo
+auto it = std::find(itens.begin(), itens.end(), busca);  // resolve sem ensinar nada sobre o algoritmo
 ```
-O que fazer no lugar: implementar um algoritmo de ordenação manualmente (como o bubble sort, que
-você vai praticar no módulo de prática), comparando e trocando elementos passo a passo, com o seu
-próprio código controlando cada comparação.
+O que fazer no lugar: implementar a busca manualmente (como no exercício "Inventário caótico", que
+você vai praticar no módulo de prática), percorrendo a lista item por item com um `for`,
+comparando cada um com o que está sendo buscado, até achar ou chegar ao fim.
 
 **Linguagem dos exercícios deste módulo**: C++ (a mesma introduzida no módulo 08).
 

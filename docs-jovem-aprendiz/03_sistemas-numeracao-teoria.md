@@ -91,6 +91,20 @@ De baixo pra cima: `41 = 101001`.
 `[TENTE VOCÊ]` Converta `13` sozinho, usando o mesmo raciocínio (par ou ímpar a cada passo).
 Resposta: `1101`.
 
+Mais um pra fixar, com um número maior — `114`:
+```
+114 ÷ 2 = 57 resto 0   → par   → último bit = 0
+ 57 ÷ 2 = 28 resto 1   → ímpar → próximo bit = 1
+ 28 ÷ 2 = 14 resto 0   → par   → próximo bit = 0
+ 14 ÷ 2 =  7 resto 0   → par   → próximo bit = 0
+  7 ÷ 2 =  3 resto 1   → ímpar → próximo bit = 1
+  3 ÷ 2 =  1 resto 1   → ímpar → próximo bit = 1
+  1 ÷ 2 =  0 resto 1   → chegou a 0: bit mais significativo
+```
+De baixo pra cima: `114 = 1110010`.
+
+`[TENTE VOCÊ]` Converta `77` sozinho, mesmo raciocínio. Resposta: `1001101`.
+
 ## `[TEORIA]` Convertendo binário → decimal
 
 Essa conversão é mais direta que a anterior, porque a informação que você precisava descobrir ali
@@ -122,6 +136,16 @@ pra completar o grupo) → `2 9` → `0x29`.
 `[TENTE VOCÊ]` Agrupe `11110101` de 4 em 4 e converta pra hexadecimal.
 Resposta: `1111 0101` → `F5` → `0xF5`.
 
+**Onde você já viu hexadecimal sem perceber:** toda cor numa página web é escrita em hexadecimal,
+tipo `#FF5733`. Não é um código arbitrário — são três valores de 0-255 (intensidade de
+Vermelho/Verde/Azul), cada um escrito como 2 dígitos hex (porque `255 = 0xFF`, o maior valor que
+2 dígitos hex representam — `16² - 1`). Decompondo `#FF5733`: `FF` = 255 (vermelho no máximo),
+`57` = `5·16 + 7 = 87` (verde), `33` = `3·16 + 3 = 51` (azul). É a mesma conversão hex→decimal
+de sempre, só que em pares de dígitos em vez de um número inteiro de uma vez.
+
+`[TENTE VOCÊ]` Decomponha a cor `#1A2B3C` em R, G, B decimais.
+Resposta: R = `0x1A` = `1·16+10 = 26`; G = `0x2B` = `2·16+11 = 43`; B = `0x3C` = `3·16+12 = 60`.
+
 `[CLI]` Conferindo conversões no terminal (Python já vem instalado na maioria dos sistemas):
 ```
 python3 -c "print(bin(41), hex(41))"
@@ -150,6 +174,24 @@ vai-um antes de somar a próxima coluna.
 
 `[TENTE VOCÊ]` Some `0110 + 0011` sozinho, prestando atenção em cada vai-um.
 Resposta: `1001` (9).
+
+**Quando o vai-um "propaga" por várias colunas seguidas** — o caso que mais gera erro de conta —
+some `0111 + 0001`:
+```
+  0111   (7)
++ 0001   (1)
+------
+  1000   (8)
+```
+Coluna 1: `1+1 = 10` → escreve `0`, vai-um `1`. Coluna 2: `1+0+vai-um(1) = 10` → escreve `0`,
+vai-um `1` de novo. Coluna 3: `1+0+vai-um(1) = 10` → escreve `0`, vai-um `1` mais uma vez.
+Coluna 4: `0+0+vai-um(1) = 1` → escreve `1`. O vai-um "empurrou" a soma por três colunas seguidas
+antes de parar — é exatamente esse efeito em cadeia que o `[ATENÇÃO]` acima avisa: parar de
+carregar o vai-um no meio da cadeia (ex: esquecer na coluna 3) dá um resultado errado sem parecer
+óbvio que algo quebrou.
+
+`[TENTE VOCÊ]` Some `1111 + 0001`, acompanhando o vai-um se propagar por toda a soma.
+Resposta: `10000` (16) — o vai-um propaga pelas 4 colunas.
 
 ## `[APROFUNDAMENTO]` Representação binária em ponto flutuante
 
