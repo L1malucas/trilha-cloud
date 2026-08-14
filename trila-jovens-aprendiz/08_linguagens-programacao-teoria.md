@@ -46,15 +46,15 @@ Lembra do módulo 03: um número, dentro do computador, é uma sequência de bit
 memória. Uma **variável** é só um nome que você dá pra uma dessas posições de memória, pra não
 precisar lembrar o endereço exato — é uma gaveta com etiqueta, em vez de uma gaveta numerada.
 
-Em uma linguagem de tipagem estática (como C), declarar o **tipo** da variável (`int`, `float`,
+Em uma linguagem de tipagem estática (como C++), declarar o **tipo** da variável (`int`, `float`,
 `char`) diz ao compilador quantos bits reservar naquela gaveta, e como interpretar o conteúdo
 dela. Um `int` normalmente usa 32 bits — e, como você viu no módulo 03, `n` bits representam `2ⁿ`
 valores possíveis, não um número ilimitado.
 
 `[ATENÇÃO]` Se um cálculo tentar guardar um valor maior do que o tipo suporta, acontece
-**overflow** — em C, isso não gera erro nem aviso: o valor simplesmente "dá a volta" e vira outro
-número, silenciosamente. É o mesmo overflow que você já foi avisado a respeito no módulo 03,
-agora acontecendo de verdade dentro de um programa.
+**overflow** — em C++, isso não gera erro nem aviso: o valor simplesmente "dá a volta" e vira
+outro número, silenciosamente. É o mesmo overflow que você já foi avisado a respeito no módulo
+03, agora acontecendo de verdade dentro de um programa.
 
 ## `[TEORIA]` Comandos básicos: sequência, decisão, repetição
 
@@ -72,27 +72,30 @@ Toda lógica de programação, por mais complexa que pareça, é construída com
 usuário, um de cada vez"? Resposta: repetição (`for`, rodando 10 vezes) — o mesmo passo (ler um
 número) se repete um número definido de vezes.
 
-## `[TEORIA]` C como linguagem de exemplo
+## `[TEORIA]` C++ como linguagem de exemplo
 
-Este módulo usa **C** como veículo de exemplo — uma linguagem compilada, de tipagem estática, que
-mantém a conexão direta com o hardware que você estudou nos módulos 03 a 05 (tipos com tamanho
-fixo em bits, sem camadas extras escondendo isso de você).
+Este módulo usa **C++** como veículo de exemplo — uma linguagem compilada, de tipagem estática,
+que mantém a conexão direta com o hardware que você estudou nos módulos 03 a 05 (tipos com
+tamanho fixo em bits, sem camadas extras escondendo isso de você), e é a mesma linguagem que você
+vai usar nos exercícios de lógica do módulo 09.
 
 **Exemplo narrado — um programa mínimo:**
-```c
-#include <stdio.h>
+```cpp
+#include <iostream>
 
 int main() {
     int idade;
-    printf("Digite sua idade: ");
-    scanf("%d", &idade);
-    printf("Você terá %d anos no ano que vem.\n", idade + 1);
+    std::cout << "Digite sua idade: ";
+    std::cin >> idade;
+    std::cout << "Você terá " << idade + 1 << " anos no ano que vem.\n";
     return 0;
 }
 ```
-Narrando: `int idade;` reserva a gaveta de memória (32 bits, tipo inteiro); `scanf` lê o valor
-digitado e guarda nela; `printf` usa o valor guardado pra montar a mensagem de saída, somando `1`
-antes de exibir.
+Narrando: `int idade;` reserva a gaveta de memória (32 bits, tipo inteiro); `std::cin >> idade`
+lê o valor digitado do teclado e guarda nela; `std::cout <<` usa o valor guardado pra montar a
+mensagem de saída, somando `1` antes de exibir. O `std::` na frente de `cout`/`cin` só diz "isso
+vem da biblioteca padrão (`std`)" — mais sobre isso não é necessário agora, mas vai reaparecer
+sempre que você usar recursos prontos da linguagem.
 
 ## Erros comuns
 
@@ -110,7 +113,7 @@ Você já viu estes avisos ao longo do módulo — aqui vai só a revisão rápi
 |---|---|
 | Sequência, decisão, repetição | Módulo 09 — construção de algoritmos completos |
 | Tipos e overflow | Reforça o módulo 03, agora dentro de um programa real |
-| C como linguagem-base | Uma das linguagens permitidas nos exercícios do módulo 09 |
+| C++ como linguagem-base | A linguagem usada nos exercícios do módulo 09 |
 
 ## `[REFERÊNCIA]`
 
@@ -122,5 +125,5 @@ Você já viu estes avisos ao longo do módulo — aqui vai só a revisão rápi
 - [ ] Explico o que é uma variável e por que o tipo dela importa, ligando a overflow do módulo 03.
 - [ ] Identifico as três estruturas de controle básicas (sequência, decisão, repetição) num
       programa dado.
-- [ ] Escrevo, compilo e executo um programa simples em C, com variável, leitura de entrada e
+- [ ] Escrevo, compilo e executo um programa simples em C++, com variável, leitura de entrada e
       saída.

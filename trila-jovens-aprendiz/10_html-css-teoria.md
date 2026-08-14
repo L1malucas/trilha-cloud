@@ -1,9 +1,10 @@
 # Módulo 10 — HTML & CSS
 
 > **Objetivo:** entender HTML como estrutura semântica de uma página e CSS como camada de estilo
-> separada dela, o suficiente para montar e estilizar páginas simples com confiança.
+> separada dela, preparar o ambiente de trabalho (VSCode) e sair pronto pra começar o desafio
+> prático diário.
 > **Pré-requisitos:** Módulo 09 (Algoritmos e Lógica de Programação).
-> **Tempo de referência:** 4 a 6 horas (mais o tempo do desafio prático, que é diário).
+> **Tempo de referência:** 3 a 4 horas (mais o tempo do desafio prático, que é diário).
 > **Prática correspondente:** [10_html-css-pratica.md](10_html-css-pratica.md)
 
 ---
@@ -13,9 +14,11 @@
 Até aqui, a trilha inteira foi sobre o que acontece "por baixo": bits, circuitos, CPU, sistema
 operacional, algoritmos. Este é o primeiro módulo em que o resultado do que você escreve aparece
 na tela, visível, pra qualquer pessoa que abrir a página. HTML e CSS são, ao mesmo tempo, o
-assunto mais simples de começar da trilha (não tem instalação, não tem compilador — um navegador
-já basta) e a porta de entrada pra tudo que vem depois: formulários que vão mandar dado pra um
-banco (módulos 11/12) e páginas que vão ganhar comportamento com JavaScript (módulo 13).
+assunto mais simples de começar da trilha (não tem instalação de linguagem, não tem compilador —
+um navegador já basta) e a porta de entrada pra tudo que vem depois: formulários que vão mandar
+dado pra um banco (módulos 11/12) e páginas que vão ganhar comportamento com JavaScript
+(módulo 13). Este módulo é curto de propósito — o grosso do aprendizado daqui pra frente acontece
+na prática diária do desafio, não numa aula longa de teoria.
 
 ## `[TEORIA]` HTML como estrutura semântica
 
@@ -32,36 +35,21 @@ cada tag diz o que aquele pedaço da página **é**, não como ele deveria parec
 <footer>...</footer>   <!-- é o rodapé -->
 ```
 
-Essas são tags **semânticas** — existe uma alternativa "genérica", a `<div>`, que não diz nada
-sobre o que está dentro dela (só marca "aqui tem um bloco"). Dá pra montar uma página inteira só
-com `<div>`s, mas isso joga fora informação que o próprio HTML já oferece de graça: um leitor de
-tela (usado por pessoas com deficiência visual) sabe anunciar "você está na navegação" quando lê
-uma `<nav>`, mas não tem como saber isso de uma `<div>` qualquer. Um buscador entende que o
-conteúdo dentro de `<article>` é o conteúdo principal daquela página. Usar a tag certa não é só
-estilo — é comunicar significado pra quem (humano ou máquina) só tem o HTML pra entender a
-página.
+Existe uma tag "genérica", a `<div>`, que não diz nada sobre o que está dentro dela (só marca
+"aqui tem um bloco"). Dá pra montar uma página inteira só com `<div>`s, mas isso joga fora
+informação que o HTML já oferece de graça: um leitor de tela sabe anunciar "você está na
+navegação" ao ler uma `<nav>`, mas não tem como saber isso de uma `<div>` qualquer.
 
-**Exemplo narrado:** montando a estrutura de uma página de blog — primeiro o `<header>` com o
-nome do site e o `<nav>` com os links de navegação; dentro do `<main>`, um `<article>` pra cada
-post; no fim, um `<footer>` com direitos autorais. Cada escolha de tag respondeu "o que esse
-pedaço *é*", não "como eu quero que ele apareça".
+`[TENTE VOCÊ]` Você está montando um cabeçalho de página com um menu de links no topo. Que tag
+usaria pro menu, em vez de uma `<div>` genérica? Resposta: `<nav>`.
 
-`[TENTE VOCÊ]` Você está montando uma página de perfil de usuário, com um menu de navegação no
-topo, uma seção com a bio da pessoa, e uma lista de posts recentes dela. Que tags você usaria
-para essas três partes? Resposta: `<nav>` pro menu, `<main>` (ou uma `<section>` dentro dele)
-pra bio, e um `<article>` pra cada post recente dentro do `<main>`.
+## `[TEORIA]` CSS: separando estrutura de apresentação
 
-## `[TEORIA]` CSS3: separando estrutura de apresentação
-
-Pensa na planta de uma casa e na decoração dela como duas coisas independentes: a planta define
-onde ficam as paredes, portas e cômodos (a estrutura); a decoração define cor da parede, tipo de
-piso, estilo dos móveis (a apresentação) — e você pode redecorar a casa inteira sem mover uma
-parede sequer. HTML é a planta; CSS é a decoração.
-
-Separar as duas coisas em arquivos diferentes (`.html` e `.css`) tem uma razão prática direta: a
-mesma estrutura HTML pode ganhar aparências completamente diferentes só trocando o CSS, sem
-mexer em uma linha de HTML — e o inverso também vale, você pode reorganizar a estrutura sem
-precisar reescrever todo o estilo do zero.
+Pensa na planta de uma casa e na decoração dela como coisas independentes: a planta define onde
+ficam paredes e cômodos (a estrutura); a decoração define cor da parede, tipo de piso (a
+apresentação) — dá pra redecorar a casa inteira sem mover uma parede. HTML é a planta; CSS é a
+decoração. Por isso ficam em arquivos separados (`.html` e `.css`): a mesma estrutura pode ganhar
+aparências diferentes só trocando o CSS, sem tocar no HTML.
 
 ```css
 h1 {
@@ -69,17 +57,43 @@ h1 {
   font-size: 2rem;
 }
 ```
-Isso diz: "todo elemento `<h1>` da página usa essa cor e esse tamanho" — a regra de estilo mora
-fora do HTML, e vale pra todos os `<h1>` de uma vez.
+Isso diz: "todo elemento `<h1>` da página usa essa cor e esse tamanho" — a regra mora fora do
+HTML, e vale pra todos os `<h1>` de uma vez.
 
-## `[TEORIA]` O modelo de caixas (box model)
+## `[TEORIA]` Preparando o ambiente: VSCode
 
-Todo elemento HTML, quando renderizado, ocupa espaço na tela em forma de caixa retangular — e
-essa caixa tem camadas, igual uma caixa de papelão de verdade: o **conteúdo** em si (o texto ou
-imagem lá dentro), o **padding** (o preenchimento/almofada entre o conteúdo e a borda, como o
-isopor dentro de uma caixa de encomenda), a **border** (a borda da caixa, visível ou não), e a
-**margin** (o espaço vazio do lado de fora da caixa, que a afasta de outras caixas ao redor —
-como o espaço entre duas caixas empilhadas num depósito).
+Antes de começar o desafio diário, vale montar a bancada de trabalho uma única vez, pra não
+perder tempo reconfigurando todo dia. O editor recomendado é o **VSCode** (Visual Studio Code,
+gratuito) — baixe em code.visualstudio.com e instale normalmente.
+
+Depois de instalado:
+
+1. **Abra uma pasta como projeto** (não um arquivo solto): `Arquivo > Abrir Pasta`, escolha (ou
+   crie) a pasta do seu desafio de 30 dias. Trabalhar por pasta, não por arquivo, é o que faz o
+   VSCode entender a relação entre seus arquivos `.html`, `.css` e imagens.
+2. **Instale duas extensões** (aba de extensões na barra lateral, ícone de blocos):
+   - **Live Server**: abre sua página `.html` num navegador e atualiza sozinha toda vez que você
+     salva — sem isso, você teria que apertar F5 manualmente a cada mudança.
+   - **Prettier**: formata seu código automaticamente ao salvar, então você não perde tempo
+     alinhando chaves e indentação na mão.
+3. **Use o terminal integrado** (`` Ctrl+` `` no Windows/Linux, `` Cmd+` `` no Mac) quando
+   precisar rodar comandos de Git pra fazer o commit diário — não precisa alternar de janela.
+
+`[TENTE VOCÊ]` Instale as duas extensões, crie um arquivo `index.html` simples dentro de uma
+pasta de projeto, e clique em "Go Live" (Live Server) no canto inferior direito do VSCode. O que
+deve acontecer? Resposta: o navegador abre sozinho mostrando sua página, e qualquer alteração
+salva no arquivo aparece automaticamente na aba aberta, sem precisar recarregar manualmente.
+
+`[ATENÇÃO]` Se as imagens ou o CSS não aparecerem mesmo com os caminhos certos, o erro mais comum
+é ter aberto um **arquivo** solto no VSCode (`Arquivo > Abrir Arquivo`) em vez da **pasta** do
+projeto inteiro — sem a pasta aberta como raiz, caminhos relativos (`./estilo.css`,
+`./imagens/foto.png`) podem não resolver do jeito esperado.
+
+## `[TEORIA]` O modelo de caixas (box model), rapidamente
+
+Todo elemento HTML ocupa espaço na tela em forma de caixa retangular, com camadas — igual uma
+caixa de papelão: o **conteúdo**, o **padding** (preenchimento entre conteúdo e borda), a
+**border**, e a **margin** (espaço vazio fora da caixa, que a afasta de outras).
 
 ```css
 .card {
@@ -91,69 +105,47 @@ como o espaço entre duas caixas empilhadas num depósito).
 ```
 
 `[ATENÇÃO]` Por padrão, `width` define só a largura do **conteúdo** — padding e border se somam
-por cima, então uma caixa com `width: 200px` e `padding: 16px` de cada lado ocupa, na prática,
-`200 + 16 + 16 = 232px` de largura total (border somaria ainda mais). É comum, no começo,
-esperar que `width: 200px` seja a largura final da caixa e se surpreender com o layout "vazando".
-A propriedade `box-sizing: border-box` resolve isso fazendo o `width` já incluir padding e
-border — vale conhecer, mas entenda primeiro o comportamento padrão antes de usá-la.
+por cima. Uma caixa com `width: 200px` e `padding: 16px` de cada lado ocupa, na prática,
+`200 + 16 + 16 = 232px`. É comum se surpreender com o layout "vazando" por esperar que `width`
+já fosse a largura final.
 
-`[TENTE VOCÊ]` Uma caixa tem `width: 100px`, `padding: 10px` em cada lado, e `border: 2px` em
-cada lado (comportamento padrão, sem `border-box`). Qual a largura total ocupada na tela?
-Resposta: `100 + 10+10 + 2+2 = 124px`.
+`[TENTE VOCÊ]` Uma caixa tem `width: 100px`, `padding: 10px` em cada lado. Qual a largura total?
+Resposta: `100 + 10 + 10 = 120px`.
 
-## `[TEORIA]` Seletores e a cascata
+## `[TEORIA]` Seletores e a cascata, rapidamente
 
-Quando duas regras CSS diferentes tentam estilizar o mesmo elemento, alguma precisa "ganhar" — é
-como duas pessoas dando instruções diferentes pra mesma tarefa: precisa existir uma regra de
-prioridade. O CSS resolve isso com **especificidade**: seletores mais específicos vencem os mais
-genéricos.
+Quando duas regras CSS tentam estilizar o mesmo elemento, o CSS decide quem vence pela
+**especificidade** — seletores mais específicos vencem os mais genéricos.
 
 ```css
-p { color: black; }          /* seleciona todo <p> — genérico */
-.aviso { color: red; }       /* seleciona quem tem class="aviso" — mais específico */
-#alerta-principal { color: orange; } /* seleciona o id "alerta-principal" — ainda mais específico */
+p { color: black; }                  /* genérico */
+.aviso { color: red; }               /* mais específico */
+#alerta-principal { color: orange; } /* ainda mais específico */
 ```
 
-Se um `<p class="aviso" id="alerta-principal">` existir, o `id` vence (é o mais específico dos
-três), então o texto fica laranja — mesmo que a regra do `id` esteja escrita antes das outras no
-arquivo. Especificidade, não ordem no arquivo, decide o empate (ordem só desempata quando a
-especificidade é igual).
+`[TENTE VOCÊ]` Um elemento tem `class="destaque"` e existem as regras
+`.destaque { color: blue; }` e `p { color: green; }`. Qual cor vence? Resposta: azul — seletor de
+classe é mais específico que seletor de tag.
 
-`[TENTE VOCÊ]` Um elemento tem `class="destaque"` e nenhum `id`. Existem as regras
-`.destaque { color: blue; }` e `p { color: green; }`. Qual cor vence? Resposta: azul — seletor
-de classe é mais específico que seletor de tag.
+## `[TEORIA]` Flexbox, rapidamente
 
-## `[TEORIA]` Flexbox: alinhando elementos sem gambiarra
-
-Antes do Flexbox, centralizar uma caixa na tela (vertical e horizontalmente) exigia truques
-pouco intuitivos. O Flexbox existe pra resolver exatamente esse tipo de problema: alinhar e
-distribuir elementos dentro de um container, numa linha ou coluna.
+O Flexbox resolve o problema clássico de alinhar e distribuir elementos dentro de um container.
 
 ```css
 .container {
   display: flex;
-  justify-content: center; /* alinha no eixo principal (horizontal, por padrão) */
-  align-items: center;     /* alinha no eixo cruzado (vertical, por padrão) */
+  justify-content: center; /* eixo principal */
+  align-items: center;     /* eixo cruzado */
 }
 ```
-
-Pensando na direção dos dois eixos ajuda a não confundir as duas propriedades: `justify-content`
-trabalha no sentido em que os itens "correm" (a linha), `align-items` no sentido perpendicular a
-essa linha.
-
-`[TENTE VOCÊ]` Você quer que os itens de um menu fiquem lado a lado, espaçados igualmente pela
-largura toda do container. Que propriedade de `justify-content` você usaria? Resposta:
-`justify-content: space-between` (ou `space-around`, dependendo se quer espaço nas pontas
-também).
 
 ## Erros comuns
 
 Você já viu estes avisos ao longo do módulo — aqui vai só a revisão rápida:
 
-- Usar `<div>` para tudo, perdendo o significado semântico que tags como `<nav>`, `<article>` e
-  `<footer>` já dariam de graça.
+- Usar `<div>` para tudo, perdendo o significado semântico de tags como `<nav>`/`<article>`.
+- Abrir um arquivo solto no VSCode em vez da pasta do projeto — quebra caminhos relativos.
 - Esquecer que padding e border se somam ao `width` no comportamento padrão do box model.
-- Achar que a ordem das regras no arquivo CSS decide o empate — quem decide é a especificidade.
 
 ## Conexão com os próximos módulos
 
@@ -166,11 +158,14 @@ Você já viu estes avisos ao longo do módulo — aqui vai só a revisão rápi
 
 - [MDN — HTML](https://developer.mozilla.org/pt-BR/docs/Web/HTML)
 - [MDN — CSS](https://developer.mozilla.org/pt-BR/docs/Web/CSS)
+- [Visual Studio Code](https://code.visualstudio.com/)
 
 ## Checklist de saída
 
-- [ ] Escolho a tag semântica certa para uma parte de página dada, sabendo justificar a escolha.
+- [ ] Escolho a tag semântica certa para uma parte de página dada.
 - [ ] Explico por que HTML e CSS ficam em arquivos separados.
-- [ ] Calculo a largura total de uma caixa considerando padding e border (box model padrão).
+- [ ] Tenho o VSCode instalado, com Live Server e Prettier, e sei abrir uma pasta de projeto
+      (não um arquivo solto).
+- [ ] Calculo a largura total de uma caixa considerando padding (box model padrão).
 - [ ] Explico como a especificidade decide qual regra CSS vence em um conflito.
 - [ ] Uso `display: flex` com `justify-content`/`align-items` para alinhar elementos.

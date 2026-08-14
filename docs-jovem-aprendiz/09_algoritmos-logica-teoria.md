@@ -16,10 +16,11 @@ sidebar_position: 90
 
 ## Por que isso importa
 
-No módulo 08 você ganhou um idioma pra dar instruções ao computador (C). Este módulo ensina o que
-dizer nesse idioma — como pensar um problema até virar uma sequência de passos que o computador
-consegue seguir. Esse raciocínio, muito mais do que decorar sintaxe, é o que separa quem programa
-resolvendo problemas de quem só copia trechos prontos sem entender por que funcionam.
+No módulo 08 você ganhou um idioma pra dar instruções ao computador (C++). Este módulo ensina o
+que dizer nesse idioma — como pensar um problema até virar uma sequência de passos que o
+computador consegue seguir. Esse raciocínio, muito mais do que decorar sintaxe, é o que separa
+quem programa resolvendo problemas de quem só copia trechos prontos sem entender por que
+funcionam.
 
 Este módulo também é a base do curso de Lógica de Programação do professor Gustavo Guanabara
 (recomendado como material audiovisual complementar, disponível no YouTube) e reaproveita
@@ -41,10 +42,10 @@ problema grande em passos pequenos o bastante pra que cada um seja trivial de tr
 ## `[TEORIA]` Pseudocódigo antes de código
 
 Pseudocódigo é escrever os passos do algoritmo em linguagem quase natural, sem se preocupar com a
-sintaxe exata de C, Python ou qualquer outra linguagem. A vantagem de escrever pseudocódigo
-primeiro é separar dois problemas diferentes: "o que fazer" (lógica) de "como escrever isso numa
-linguagem específica" (sintaxe) — assim, um erro de lógica fica visível antes mesmo de você abrir
-o editor de código.
+sintaxe exata de C++ ou qualquer outra linguagem. A vantagem de escrever pseudocódigo primeiro é
+separar dois problemas diferentes: "o que fazer" (lógica) de "como escrever isso numa linguagem
+específica" (sintaxe) — assim, um erro de lógica fica visível antes mesmo de você abrir o editor
+de código.
 
 **Exemplo narrado — encontrar o maior número de uma lista, em pseudocódigo:**
 ```
@@ -77,20 +78,20 @@ decisão avalia cada um, e assim que a decisão encontra um divisor, o algoritmo
 ## `[ATENÇÃO]` Proibido usar métodos embutidos da linguagem
 
 Nos exercícios deste módulo (e nas apostilas de apoio), **é proibido usar métodos ou funções
-prontas da linguagem que já resolvem o problema por você** — por exemplo, usar `.sort()` do
-Python pra ordenar uma lista, ou uma função pronta de "é primo" de alguma biblioteca. O objetivo
-do exercício não é ordenar uma lista (Python já faz isso em uma linha) — é entender e implementar
+prontas da linguagem que já resolvem o problema por você** — por exemplo, usar `std::sort()` do
+C++ pra ordenar uma lista, ou `std::find()` pra buscar um elemento. O objetivo do exercício não é
+ordenar uma lista (a biblioteca padrão já faz isso em uma linha) — é entender e implementar
 **você mesmo** o algoritmo por trás disso.
 
 O que **não** fazer:
-```python
-lista.sort()  # resolve o problema sem ensinar nada sobre o algoritmo
+```cpp
+std::sort(vetor.begin(), vetor.end());  // resolve o problema sem ensinar nada sobre o algoritmo
 ```
 O que fazer no lugar: implementar um algoritmo de ordenação manualmente (como o bubble sort, que
 você vai praticar no módulo de prática), comparando e trocando elementos passo a passo, com o seu
 próprio código controlando cada comparação.
 
-**Linguagens permitidas para os exercícios**: C/C++, Python, Java ou Pascal.
+**Linguagem dos exercícios deste módulo**: C++ (a mesma introduzida no módulo 08).
 
 ## Erros comuns
 
