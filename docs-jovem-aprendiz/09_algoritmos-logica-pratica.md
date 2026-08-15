@@ -574,26 +574,40 @@ p p p p p * * * * *
 p * * * * * * * * p
 ```
 
-*(Saída acima simplificada como exemplo ilustrativo do critério — o essencial é: um `t` vira `p`
-se pelo menos um dos 4 vizinhos diretos for `*`.)*
-
 #### 22. Batalha de Yavin
 
 Numa matriz `NxN` (`3 <= N <= 100`), cada posição tem `0` (sem nave) ou `1` (nave inimiga). Luke
-Skywalker se teleporta `M` vezes (`1 <= M <= 1000`) para coordenadas dadas; a cada teleporte, ele
-atira e destrói a primeira nave inimiga que esteja à frente dele, na mesma linha, a partir da
-coluna do teleporte para a direita (se não houver nenhuma, o tiro não acerta nada). Luke nunca se
-teleporta pra cima de uma nave. Dado `N`, `M`, a matriz, e as `M` coordenadas de teleporte, some
-quantas naves ele destrói ao todo.
+Skywalker se teleporta `M` vezes (`1 <= M <= 1000`) para coordenadas dadas (linha, coluna); a
+cada teleporte, ele dá um único tiro, destruindo a primeira nave inimiga que esteja à sua frente,
+na mesma linha, a partir da coluna do teleporte para a direita (se não houver nenhuma nessa
+direção, o tiro não acerta nada). Luke nunca se teleporta pra cima de uma nave. Dado `N`, `M`, a
+matriz, e as `M` coordenadas de teleporte, some quantas naves ele destrói ao todo.
+
+```
+Entrada:
+8 3
+0 0 0 0 0 0 0 1
+1 0 0 1 0 1 0 0
+0 0 0 0 1 0 0 0
+0 0 0 1 0 0 0 0
+0 0 0 0 0 0 1 0
+0 1 0 0 1 0 0 0
+0 1 0 0 0 0 0 0
+0 0 0 0 0 0 0 0
+7 2
+3 5
+3 1
+Saída: 2
+```
 
 ```
 Entrada:
 4 2
 0 1 0 1
-0 0 0 0
-0 1 0 0
+0 1 1 0
+1 0 0 0
 0 0 0 1
-3 1
+3 2
 3 1
 Saída: 2
 ```
