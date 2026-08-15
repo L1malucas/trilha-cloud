@@ -88,23 +88,6 @@ const config = {
     ],
   ],
 
-  // Segunda instância de docs: trilha Jovem Aprendiz. Vive sob /jovem-aprendiz/,
-  // separada da trilha AWS (que usa o preset 'classic' acima, em routeBasePath '/').
-  // Sem versionamento por enquanto — essa trilha ainda não teve um corte "v1".
-  plugins: [
-    [
-      '@docusaurus/plugin-content-docs',
-      /** @type {import('@docusaurus/plugin-content-docs').Options} */
-      ({
-        id: 'jovemAprendiz',
-        path: 'docs-jovem-aprendiz',
-        routeBasePath: 'jovem-aprendiz',
-        sidebarPath: './sidebars-jovem-aprendiz.js',
-        editUrl: `https://github.com/${GITHUB_USER}/${REPO_NAME}/tree/main/docs-jovem-aprendiz/`,
-      }),
-    ],
-  ],
-
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
@@ -125,11 +108,9 @@ const config = {
             position: 'left',
           },
           {
-            type: 'docSidebar',
-            docsPluginId: 'jovemAprendiz',
-            sidebarId: 'jovemAprendizSidebar',
-            position: 'left',
+            href: 'https://l1malucas.github.io/trilha-jovem-aprendiz/',
             label: 'Jovem Aprendiz',
+            position: 'left',
           },
           {
             href: `https://github.com/${GITHUB_USER}/${REPO_NAME}`,
