@@ -164,7 +164,9 @@ Você já viu estes avisos ao longo do módulo — aqui vai só a revisão rápi
 
 - [MDN — HTML](https://developer.mozilla.org/pt-BR/docs/Web/HTML)
 - [MDN — CSS](https://developer.mozilla.org/pt-BR/docs/Web/CSS)
-- [Visual Studio Code](https://code.visualstudio.com/)
+- [Visual Studio Code — documentação oficial](https://code.visualstudio.com/docs)
+- [CSS-Tricks](https://css-tricks.com/) — artigos e guias práticos de CSS, bom complemento à
+  referência mais formal do MDN.
 
 ## Checklist de saída
 

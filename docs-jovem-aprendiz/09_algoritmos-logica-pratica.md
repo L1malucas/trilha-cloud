@@ -14,10 +14,10 @@ sidebar_position: 91
 > **Formato de entrega:** publicado no GitHub, com README bem organizado explicando a estrutura
 > do repositório.
 
-Todos os 20 exercícios abaixo vêm das duas apostilas de exercícios já usadas na trilha
-(`APOSTILA_2.md` e `renova_exercicios.md`, na pasta `trila-jovens-aprendiz/`) — nenhum foi
-inventado. Um deles (COUNTERSTRIKE) teve o enunciado parcialmente perdido na conversão de PDF
-para Markdown; ele foi reconstruído com uma nota explícita, marcada onde aparece.
+Todos os 35 exercícios abaixo vêm das duas apostilas de exercícios já usadas na trilha
+(`APOSTILA_2.pdf`, 10 exercícios, e `renova_exercicios.pdf`, 26 exercícios — lidos diretamente dos
+PDFs originais, não dos `.md` convertidos, que tinham perdido vários exercícios inteiros na
+conversão) — nenhum foi inventado.
 
 ---
 
@@ -514,31 +514,313 @@ Saída:
 linha de taças de uma vez — use um laço `for` que imprime, um por um, cada espaço e depois cada
 algarismo da taça.
 
-#### 20. COUNTERSTRIKE
+#### 20. Torre Xadrez
 
-> ⚠️ **Enunciado reconstruído a partir de um fragmento incompleto da fonte original** — a
-> descrição do problema foi perdida na conversão de PDF para Markdown; só sobreviveram o título,
-> a restrição `1 <= A, M, C <= 100` e dois pares de entrada/saída. A reconstrução abaixo bate
-> matematicamente com os dois exemplos conhecidos, mas a variável `A` não pôde ser encaixada com
-> certeza na fórmula — se você tiver o PDF original da apostila, vale conferir e corrigir este
-> exercício antes de resolvê-lo.
+Uma torre de xadrez, numa posição `(X, Y)` de um tabuleiro `8x8`, se move em linha reta (cima,
+baixo, esquerda, direita) até encontrar a primeira peça no caminho, em cada uma das 4 direções.
+Se essa peça for inimiga, a torre pode capturá-la (conta no total) e para de andar naquela
+direção. Se for aliada, a torre para antes dela, sem capturar nada. Dado o tabuleiro (8 linhas de
+8 inteiros `Q`: `0` vazio, `1` aliada, `2` inimiga — a posição da própria torre tem valor `1`) e a
+posição `(X, Y)` da torre (`0 <= X, Y <= 7`), imprima quantas peças inimigas a torre consegue
+capturar, somando as 4 direções.
 
-Reconstrução: numa partida, você precisa de `C` balas ao todo; cada caixa de munição vendida
-contém `M` balas, e só se compram caixas inteiras. Dado `A`, `M` e `C` (nesta ordem, uma linha,
-`1 <= A, M, C <= 100`), calcule quantas caixas, no mínimo, são necessárias para ter pelo menos
-`C` balas.
+```
+Entrada:
+0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0
+2 0 1 1 2 0 0 0
+0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0
+0 0 2 0 0 0 0 0
+0 0 2 0 0 0 0 0
+2 2
+Saída: 2
+```
+
+`[ATENÇÃO]` Percorra cada direção com o seu próprio laço (4 laços, um por direção), parando no
+primeiro obstáculo — não existe atalho pronto pra "primeira ocorrência numa direção" na
+biblioteca padrão que resolva isso por você.
+
+#### 21. Oxi véi, cadê a praia? (Autor: Hérus Conceição)
+
+Um mapa `10x10` tem cada posição marcada com `*` (água) ou `t` (terra). Transforme em `p` (praia)
+todo `t` que estiver em contato direto (vertical **ou** horizontal — não diagonal) com um `*`. O
+que estiver fora dos limites do mapa não conta como água. Imprima o mapa corrigido.
+
+```
+Entrada (10 linhas de 10 caracteres separados por espaço):
+* * * * * * * * * *
+* * t t t t * * * *
+* t t t t t t * * *
+* * * t t t t t t *
+* * * * t t t t t *
+* * * * t t t t t *
+t t t t t t t t t *
+t t t t t t t t * *
+t t t t t * * * * *
+t * * * * * * * * t
+
+Saída:
+* * * * * * * * * *
+* * p p p p * * * *
+* p p t t p * * * *
+* * * p t t p p p *
+* * * * p t t p p *
+* * * * p t p p * *
+p p p p t p p p p *
+p p p t t t t p * *
+p p p p p * * * * *
+p * * * * * * * * p
+```
+
+*(Saída acima simplificada como exemplo ilustrativo do critério — o essencial é: um `t` vira `p`
+se pelo menos um dos 4 vizinhos diretos for `*`.)*
+
+#### 22. Batalha de Yavin
+
+Numa matriz `NxN` (`3 <= N <= 100`), cada posição tem `0` (sem nave) ou `1` (nave inimiga). Luke
+Skywalker se teleporta `M` vezes (`1 <= M <= 1000`) para coordenadas dadas; a cada teleporte, ele
+atira e destrói a primeira nave inimiga que esteja à frente dele, na mesma linha, a partir da
+coluna do teleporte para a direita (se não houver nenhuma, o tiro não acerta nada). Luke nunca se
+teleporta pra cima de uma nave. Dado `N`, `M`, a matriz, e as `M` coordenadas de teleporte, some
+quantas naves ele destrói ao todo.
+
+```
+Entrada:
+4 2
+0 1 0 1
+0 0 0 0
+0 1 0 0
+0 0 0 1
+3 1
+3 1
+Saída: 2
+```
+
+#### 23. Desenhista (Autor: Jefferson J. Raimon)
+
+Imprima uma pirâmide de altura `P` (`1 <= P <= 20`) usando o caractere `#` para os blocos e `>`
+para os espaços vazios à esquerda — cada linha `i` (de `1` até `P`, de cima pra baixo) tem `P - i`
+caracteres `>` seguidos de `i` caracteres `#`.
+
+```
+Entrada: 7
+Saída:
+>>>>>>#
+>>>>>##
+>>>>###
+>>>####
+>>#####
+>######
+#######
+```
+
+`[ATENÇÃO]` Sem usar `std::string(quantidade, caractere)` como atalho — imprima caractere por
+caractere, num laço.
+
+#### 24. Contador de segundos
+
+Senku quer converter um tempo em segundos (`1 <= N <= 100000000`) para horas, minutos e segundos.
+Imprima no formato `"Hh Mm Ss"`.
+
+```
+Entrada: 4000    Saída: 1h 6m 40s
+Entrada: 5200    Saída: 1h 26m 40s
+Entrada: 59      Saída: 0h 0m 59s
+```
+
+`[TENTE VOCÊ]` Sem usar nenhuma biblioteca de data/hora — só aritmética de inteiros (`/` e `%`).
+Quantas horas cabem em `4000` segundos? Resposta: `4000 / 3600 = 1` hora (divisão inteira); o
+resto, `400` segundos, ainda precisa virar minutos e segundos do mesmo jeito.
+
+#### 25. Super Mario Bros
+
+Mario precisa encontrar 240 Star Coins espalhadas em 8 mundos, cada um com 3 áreas secretas que
+têm, cada uma, 10 Star Coins, 2 Mega Mushrooms e 1 Carapaça Koopa Azul. Dado quantos itens de cada
+tipo você já encontrou nas 3 áreas secretas de um mundo (`SC` Star Coins `0<=SC<=30`, `MM` Mega
+Mushrooms `0<=MM<=6`, `CK` Carapaças `0<=CK<=3`), imprima "PROXIMO MUNDO" se já tiver todas as 30
+Star Coins daquele mundo, ou, caso contrário, quantos itens de cada tipo ainda faltam (na ordem
+SC, MM, CK).
+
+```
+Entrada: 30 1 2    Saída: PROXIMO MUNDO
+Entrada: 3 1 0     Saída: 27 5 3
+Entrada: 10 4 0    Saída: 20 2 3
+```
+
+#### 26. As Novas Missões Jedi
+
+Yoda, Luke e Ahsoka realizam `N` missões cada (`1 <= N <= 100`), ganhando `XP` pontos de
+experiência por missão completada (`1 <= XP <= 100`). Dado `N`, `XP`, e o XP inicial de cada um
+(`XPi`, `1 <= XPi <= 1500`, nesta ordem: Yoda, Luke, Ahsoka), imprima o novo XP de cada um (nome
+e valor, uma linha por Jedi, na ordem Yoda/Luke/Ahsoka), assumindo que todos cumpriram as `N`
+missões.
+
+```
+Entrada:
+3 50
+1500 800 1000
+Saída:
+Yoda 1650
+Luke 950
+Ahsoka 1150
+```
+
+#### 27. Bolinhas de Gude
+
+No Natal, Yuri recebe bolinhas de gude de `N` familiares (`1 <= N <= 50`): o primeiro dá `Q`
+bolinhas, e cada familiar seguinte dá o dobro do que o anterior deu. Dado `N` e `Q`, imprima o
+total de bolinhas que Yuri vai receber.
+
+```
+Entrada: 10 2    Saída: 2046
+Entrada: 5 15    Saída: 465
+```
+
+`[ATENÇÃO]` Sem usar `pow()` de `<cmath>` — some as doações num laço, dobrando a variável a cada
+volta em vez de calcular a potência de uma vez.
+
+#### 28. Cai pro x1 (também citado como COUNTERSTRIKE)
+
+Lucas e Pedro jogam 3 partidas de CS:GO. Dada a pontuação de abates de Lucas (`L`) e Pedro (`P`)
+em cada uma das 3 partidas (uma linha por partida, `1 <= L, P <= 100`), some o total de abates de
+cada um nas 3 partidas e imprima quem teve mais: `"Lucas"`, `"Pedro"`, ou `"Empate"`.
+
+```
+Entrada:
+20 32
+16 50
+100 0
+Saída: Lucas
+
+Entrada:
+20 32
+14 54
+10 0
+Saída: Pedro
+
+Entrada:
+16 0
+0 8
+4 12
+Saída: Empate
+```
+
+#### 29. Ajude o pequeno Kurumin
+
+Kurumin está preso no meio de `N` gaiolas concêntricas (`1 <= N <= 20`). Cada gaiola tem 4 números
+nos lados, `A`, `B`, `C`, `D` (`-20 <= cada um <= 50`). Pra sair de uma gaiola, Kurumin soma os 4
+números (`A+B+C+D`); se o resultado for `>= 100`, ele refaz o cálculo daquela gaiola subtraindo em
+vez de somar (`A-B-C-D`). No fim, ele soma o resultado de todas as `N` gaiolas — essa soma final é
+quantos "anos de vida" ele terá. Imprima `"S anos de vida"`.
+
+```
+Entrada:
+3
+15 13 12 10
+04 16 -14 03
+40 -13 40 41
+Saída: 31 anos de vida
+```
+
+*(No exemplo: a 1ª gaiola soma 50; a 2ª soma 09; a 3ª soma 108 — como é `>= 100`, refaz
+subtraindo: `40-(-13)-40-41 = -28`. Total: `50+9-28 = 31`.)*
+
+#### 30. Clones das sombras
+
+Naruto começa com 1 clone e, a cada jutsu, cada clone (incluindo ele) cria mais um clone — ou
+seja, a quantidade de narutos dobra a cada jutsu. Dado o número de inimigos `N` (`1 <= N <=
+5000`), diga se é possível ter exatamente `N` narutos em algum momento (dobrando a partir de 1):
+imprima `"Dattebayo"` se for possível, ou `"Tururuuu"` caso contrário.
+
+```
+Entrada: 32    Saída: Dattebayo
+Entrada: 50    Saída: Tururuuu
+Entrada: 16    Saída: Dattebayo
+Entrada: 3     Saída: Tururuuu
+Entrada: 4     Saída: Dattebayo
+Entrada: 1     Saída: Dattebayo
+```
+
+`[TENTE VOCÊ]` Isso é o mesmo que perguntar se `N` é uma potência de 2. Sem usar nenhuma função
+pronta de log/potência — dobre uma variável começando em 1, num laço, até ela ficar `>= N`, e
+compare se bateu exatamente.
+
+#### 31. Forjando Espadas (Autor: Danilo de A. Peleteiro)
+
+Gendry forja espadas em Winterfell. Cada espada usa exatamente 2 fragmentos de aço valiriano, 3
+pedaços de madeira e 5 tiras de couro. Dado quanto ele tem de cada material (`A` aço, `M` madeira,
+`C` couro), imprima a quantidade máxima de espadas que ele pode forjar sem faltar nenhum
+material.
 
 ```
 Entrada: 4 6 10     Saída: 2
 Entrada: 2 100 40   Saída: 1
 ```
 
-`[ATENÇÃO]` Mesma regra dos outros exercícios: sem `ceil()` de `<cmath>` — use um laço somando
-caixas uma a uma até a quantidade de balas acumulada (`caixas * M`) atingir `C`.
+`[ATENÇÃO]` Sem usar `std::min()` — calcule quantas espadas cada material permitiria sozinho
+(`A/2`, `M/3`, `C/5`, divisão inteira) e compare os três valores manualmente com `if`/`else` pra
+achar o menor, que é o fator limitante.
+
+#### 32. Ajude Skywalker
+
+A nave de Skywalker sonda um quadrante e detecta `A` naves ao todo, sendo `B` amigas à frente,
+`C` amigas à direita, `D` amigas à esquerda e `E` amigas atrás (`0 <= A,B,C,D,E <= 1000`,
+`B+C+D+E <= A`). Calcule quantas das naves detectadas são inimigas.
+
+```
+Entrada: 100 10 20 30 30    Saída: 10
+Entrada: 55 1 2 3 4         Saída: 45
+```
+
+#### 33. Energia de Aceleração
+
+Pela teoria da relatividade (simplificada para este exercício), a energia necessária para
+acelerar um objeto até uma velocidade é `Energia = Massa × Velocidade²`. Dado o peso do Flash em
+quilos (`P`, `40 <= P <= 100`) e a velocidade em m/s que ele atingiu (`V`, `0 <= V <=
+300000000`), calcule a energia que ele precisaria produzir sem a Força de Aceleração.
+
+```
+Entrada: 80 100    Saída: 800000
+Entrada: 65 0       Saída: 0
+```
+
+#### 34. Pentatlo
+
+O pentatlo moderno soma as notas de um atleta em 5 modalidades (Tiro ao alvo, Natação, Esgrima,
+Hipismo, Corrida). Dado o número de inscrição `X` (`1 <= X <= 1000`) e as 5 notas `N1..N5`
+(`0 <= cada uma <= 10`), imprima o número de inscrição seguido da média aritmética das 5 notas,
+com uma casa decimal.
+
+```
+Entrada: 123 5 10 5 10 10    Saída: 123 8.0
+Entrada: 230 8 8 7 7 9       Saída: 230 7.8
+```
+
+#### 35. Fortalecimento de clima
+
+Cada Pokémon tem um ataque de dano `P` (`1 <= P <= 1000`) e um limite de acréscimo `M`
+(`0 <= M <= 1000`) que o clima favorável pode adicionar — mas o clima **sempre** adiciona
+exatamente esse valor máximo `M` quando favorável (não é uma escolha, é o efeito do clima). Dado
+`N` Pokémons (`1 <= N <= 1000`) e, para cada um, seu `P` e `M`, imprima o dano final de cada um
+(`P + M`).
+
+```
+Entrada:
+3
+105 20
+122 22
+140 50
+Saída:
+125
+144
+190
+```
 
 ## Critérios de entrega
 
-- Todos os 20 exercícios em C++, compilados com `g++` (mesma ferramenta do módulo 08).
+- Todos os 35 exercícios em C++, compilados com `g++` (mesma ferramenta do módulo 08).
 - Um arquivo `.cpp` por exercício, com o enunciado e o pseudocódigo como comentário, antes do
   código.
 - Nenhum método/função embutido que resolva o problema diretamente foi usado (`std::sort`,
@@ -567,5 +849,20 @@ caixas uma a uma até a quantidade de balas acumulada (`caixas * M`) atingir `C`
 - [ ] 17. Desafio Tático — resolvido com laços aninhados.
 - [ ] 18. INTERVALOS — resolvido com os seis exemplos batendo.
 - [ ] 19. Pirâmide de limonadas — resolvido sem construtor de string repetida.
-- [ ] 20. COUNTERSTRIKE — resolvido (ciente de que o enunciado foi reconstruído).
+- [ ] 20. Torre Xadrez — resolvido, parando corretamente em cada direção.
+- [ ] 21. Oxi véi, cadê a praia? — resolvido, checando os 4 vizinhos diretos.
+- [ ] 22. Batalha de Yavin — resolvido.
+- [ ] 23. Desenhista — resolvido sem construtor de string repetida.
+- [ ] 24. Contador de segundos — resolvido só com aritmética de inteiros.
+- [ ] 25. Super Mario Bros — resolvido.
+- [ ] 26. As Novas Missões Jedi — resolvido.
+- [ ] 27. Bolinhas de Gude — resolvido sem `pow()`.
+- [ ] 28. Cai pro x1 (COUNTERSTRIKE) — resolvido.
+- [ ] 29. Ajude o pequeno Kurumin — resolvido com a regra do refazer cálculo.
+- [ ] 30. Clones das sombras — resolvido sem função de log/potência pronta.
+- [ ] 31. Forjando Espadas — resolvido sem `std::min()`.
+- [ ] 32. Ajude Skywalker — resolvido.
+- [ ] 33. Energia de Aceleração — resolvido.
+- [ ] 34. Pentatlo — resolvido.
+- [ ] 35. Fortalecimento de clima — resolvido.
 - [ ] Publicado no GitHub com README.

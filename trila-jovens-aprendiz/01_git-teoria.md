@@ -421,7 +421,8 @@ Você já viu estes avisos ao longo do módulo — aqui vai só a revisão rápi
 
 - [Learn Git Branching](https://learngitbranching.js.org/?locale=pt_BR) — ferramenta interativa
   usada na prática deste módulo.
-- [Documentação oficial do Git (pt-BR)](https://git-scm.com/book/pt-br/v2)
+- [Pro Git Book (pt-BR)](https://git-scm.com/book/pt-br/v2) — livro oficial e gratuito do Git.
+- [Documentação oficial do Git](https://git-scm.com/doc) — referência de todos os comandos.
 
 ## Checklist de saída
 

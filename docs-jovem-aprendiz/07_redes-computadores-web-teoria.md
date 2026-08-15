@@ -134,6 +134,32 @@ instantânea, leva tempo pra "propagar" por todos eles. É por isso que, logo de
 de servidor, algumas pessoas conseguem acessar o site normalmente e outras (usando um servidor DNS
 que ainda não recebeu a atualização) recebem erro ou veem a versão antiga por um tempo.
 
+## `[CLI]` Diagnosticando rede na prática
+
+Tudo que você viu até aqui (endereçamento, DNS, camadas) tem comandos de terminal correspondentes
+que tornam esses conceitos visíveis, em vez de abstratos:
+
+```
+ping <host>       # testa se um host responde, e mede o tempo de ida e volta (latência)
+tracert <host>    # Windows — mostra cada "salto" de roteador até o host de destino
+traceroute <host> # Mac/Linux — mesma coisa que tracert
+ipconfig          # Windows — mostra o seu próprio endereço IP
+ifconfig / ip addr # Mac/Linux — mesma coisa que ipconfig
+nslookup <domínio> # consulta o DNS manualmente e mostra o IP resolvido
+```
+
+`nslookup` é o mais direto de conectar com o que você acabou de ver: é literalmente o comando que
+faz, na sua mão, a mesma consulta que o navegador faz sozinho antes de qualquer requisição HTTP —
+"qual é o IP desse domínio?". Rodar `nslookup google.com` mostra na tela o mesmo tipo de resposta
+que o DNS devolveria pro navegador, só que visível pra você em vez de escondida por trás dos
+panos.
+
+`[TENTE VOCÊ]` Rode `ping` e `nslookup` para um domínio real (ex: `google.com`) no seu terminal.
+O `ping` respondeu? O IP que o `nslookup` mostrou bate com o que você esperava? Resposta esperada:
+`ping` deve mostrar um tempo de resposta em milissegundos (ex: `time=12ms`); `nslookup` deve
+mostrar um ou mais endereços IPv4 (e possivelmente IPv6) associados ao domínio — esse é
+exatamente o IP que o navegador usaria por trás dos panos.
+
 ## `[TEORIA]` HTTP, URL e HTML
 
 HTTP funciona em ciclos de **requisição-resposta**: seu navegador monta uma requisição pedindo um
@@ -155,6 +181,23 @@ protocolo  domínio    caminho   query string
 `[TENTE VOCÊ]` Decomponha `https://learngitbranching.js.org/?locale=pt_BR` nas suas partes.
 Resposta: protocolo `https`, domínio `learngitbranching.js.org`, caminho `/` (a raiz do site),
 query string `locale=pt_BR`.
+
+`[CLI]` Você não precisa de um navegador pra fazer uma requisição HTTP — é possível fazer a mesma
+coisa direto do terminal, com o `curl`: uma ferramenta de linha de comando que monta e envia uma
+requisição HTTP e mostra a resposta bruta na tela, sem renderizar nada (sem CSS, sem imagens, só
+o texto puro que o servidor devolveu). É útil justamente por isso — pra ver exatamente o que o
+servidor respondeu, sem o navegador "esconder" nada por trás da página já montada.
+
+```
+curl https://exemplo.com
+```
+
+Isso imprime no terminal o HTML bruto da resposta. Adicionando a opção `-v` (verbose), o `curl`
+também mostra a requisição enviada e os cabeçalhos da resposta — não só o conteúdo:
+
+```
+curl -v https://exemplo.com
+```
 
 ## `[TEORIA]` Protocolos de aplicação além do HTTP
 
@@ -193,6 +236,19 @@ para exibir), e uma aplicação separada — rodando no navegador — consome es
 interface do lado do cliente. É a base do que você vai construir no módulo 13 (JavaScript/Node),
 consumindo e expondo esse tipo de API.
 
+## Conceitos Fundamentais de Rede — Referência Rápida
+
+| Conceito | O que é | Para aprofundar |
+|---|---|---|
+| HTTP/HTTPS | Protocolo de transferência de hipertexto. Define como cliente e servidor trocam mensagens. HTTPS adiciona criptografia TLS sobre o HTTP. | [MDN — Visão geral do HTTP](https://developer.mozilla.org/pt-BR/docs/Web/HTTP/Overview) |
+| URL | Uniform Resource Locator. Endereço completo de um recurso: `scheme://user:pass@host:port/path?query#hash` | [MDN — O que é uma URL?](https://developer.mozilla.org/pt-BR/docs/Learn/Common_questions/Web_mechanics/What_is_a_URL) |
+| DNS | Domain Name System. Traduz nomes legíveis (google.com) em endereços IP. É a "agenda telefônica" da internet. | [Cloudflare — O que é DNS?](https://www.cloudflare.com/pt-br/learning/dns/what-is-dns/) |
+| Domínio e Subdomínio | Domínio: github.com. Subdomínio: api.github.com. O subdomínio aponta para um servidor ou serviço diferente. | [MDN — Nomes de domínio](https://developer.mozilla.org/pt-BR/docs/Learn/Common_questions/Web_mechanics/What_is_a_domain_name) |
+| TCP/IP | Protocolos de transporte da internet. TCP garante entrega ordenada e confiável de pacotes; IP cuida do roteamento. | [Cloudflare — O que é TCP/IP?](https://www.cloudflare.com/pt-br/learning/ddos/glossary/tcp-ip/) |
+| Porta | Número que identifica um serviço específico em um host. HTTP=80, HTTPS=443, Node local=3000, PostgreSQL=5432. | [MDN — Portas TCP e UDP](https://developer.mozilla.org/en-US/docs/Glossary/Port) |
+| Status HTTP | 1xx=informativo, 2xx=sucesso, 3xx=redirecionamento, 4xx=erro do cliente, 5xx=erro do servidor. | [MDN — Códigos de status HTTP](https://developer.mozilla.org/pt-BR/docs/Web/HTTP/Status) |
+| Headers | Metadados enviados junto com requisições e respostas: Content-Type, Authorization, Cache-Control, etc. | [MDN — HTTP Headers](https://developer.mozilla.org/pt-BR/docs/Web/HTTP/Headers) |
+
 ## Erros comuns
 
 Você já viu estes avisos ao longo do módulo — aqui vai só a revisão rápida:
@@ -219,6 +275,9 @@ Você já viu estes avisos ao longo do módulo — aqui vai só a revisão rápi
 
 - KUROSE, J. F.; ROSS, K. W. *Redes de Computadores e a Internet — Uma Nova Abordagem*, 3ª ed.,
   Pearson Education / Makron Books, 2005.
+- [MDN — Visão geral do HTTP](https://developer.mozilla.org/pt-BR/docs/Web/HTTP/Overview)
+- [Cloudflare Learning Center — o que é DNS, TCP/IP, DDoS glossário](https://www.cloudflare.com/pt-br/learning/)
+- [curl — documentação oficial](https://curl.se/docs/manpage.html)
 
 ## Checklist de saída
 
@@ -231,3 +290,6 @@ Você já viu estes avisos ao longo do módulo — aqui vai só a revisão rápi
 - [ ] Descrevo o ciclo de requisição-resposta do HTTP.
 - [ ] Nomeio pelo menos dois protocolos de aplicação além do HTTP (SMTP, FTP) e digo pra que cada
       um serve.
+- [ ] Uso `ping`, `tracert`/`traceroute`, `ipconfig`/`ifconfig` e `nslookup` pra diagnosticar
+      conectividade e resolução de DNS na prática.
+- [ ] Sei o que `curl` faz e uso pra inspecionar uma requisição HTTP direto do terminal.

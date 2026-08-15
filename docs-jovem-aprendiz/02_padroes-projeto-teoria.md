@@ -232,6 +232,7 @@ Você já viu estes quatro avisos ao longo do módulo — aqui vai só a revisã
 - [Conventional Commits](https://www.conventionalcommits.org/pt-br/)
 - [Semantic Versioning 2.0.0](https://semver.org/lang/pt-BR/)
 - [Git Tagging — documentação oficial](https://git-scm.com/book/pt-br/v2/Fundamentos-do-Git-Marcando)
+- [GitHub — Sobre pull requests](https://docs.github.com/pt/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-pull-requests)
 
 ## Checklist de saída
 

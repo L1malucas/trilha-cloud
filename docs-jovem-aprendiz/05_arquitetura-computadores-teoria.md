@@ -167,6 +167,63 @@ demais pra ser a única memória usada durante a execução; a hierarquia existe
 usado com frequência nos níveis rápidos, e reservar o disco pro que precisa de espaço, não
 velocidade.
 
+## `[TEORIA]` RAM x VRAM
+
+A RAM que você já viu neste módulo é a memória geral do sistema — compartilhada por tudo que a
+CPU processa: o sistema operacional, o navegador, o jogo, a planilha. Mas quando o assunto é
+gráficos (jogos, edição de vídeo, renderização 3D), existe uma segunda memória, separada,
+dedicada só a isso: a **VRAM** (memória de vídeo), que fica fisicamente ao lado da GPU, não da
+CPU.
+
+O motivo de separar as duas não é capricho — é o mesmo motivo do gargalo de Von Neumann que você
+já viu: se GPU e CPU tivessem que disputar a mesma memória pelo mesmo barramento, uma travaria a
+outra toda vez que precisasse ler ou escrever um dado. A GPU precisa ler e escrever texturas e
+frames inteiros, repetidamente, dezenas de vezes por segundo, em paralelo massivo — um padrão de
+acesso totalmente diferente do que a CPU faz. Dar à GPU sua própria memória, otimizada pra esse
+padrão, evita que as duas se atravessem.
+
+`[TENTE VOCÊ]` Por que jogos e softwares de edição de vídeo "pesam" mais na VRAM do que na RAM
+comum? Resposta: porque o que eles mais manipulam são texturas, frames e dados gráficos — exatamente
+o tipo de dado que a GPU processa usando a VRAM, não a RAM geral do sistema.
+
+`[CLI]` No Windows, para ver informações da GPU (incluindo a VRAM disponível), abra a ferramenta
+gráfica `dxdiag` (Win+R, digite `dxdiag`, Enter) e veja a aba "Display".
+
+## `[TEORIA]` HDD x SSD
+
+Você já viu que o disco é o nível mais lento da hierarquia de memória — mas "disco" não é uma
+coisa só. Existem dois tipos bem diferentes:
+
+- **HDD** (Hard Disk Drive): mecânico — discos girando fisicamente a milhares de rotações por
+  minuto, com um braço/cabeça de leitura se movendo fisicamente até a posição do dado. É como
+  precisar levantar e caminhar até um armário físico toda vez que precisa de algo.
+- **SSD** (Solid State Drive): memória flash — sem nenhuma parte mecânica se movendo, o dado é
+  lido eletricamente, quase instantaneamente, não importa "onde" ele fisicamente esteja no chip.
+
+Essa diferença física se traduz em ordens de grandeza de velocidade: um computador com HDD pode
+levar dezenas de segundos pra dar boot; o mesmo computador com SSD, poucos segundos — porque não
+existe tempo de espera mecânico pra "procurar" o dado. Em troca, SSD custa mais por GB de
+capacidade, e HDD ainda é comum quando o que importa é armazenar muito por pouco dinheiro (ex:
+servidores de backup) em vez de velocidade.
+
+`[ATENÇÃO]` HDD, por ter partes mecânicas se movendo, é bem mais sensível a impacto físico
+(derrubar o computador ligado pode danificar o disco em movimento) — SSD, sem partes móveis, é
+muito mais resistente a esse tipo de dano.
+
+`[TENTE VOCÊ]` Por que um SSD não sofre com "tempo de busca" (seek time) da forma que um HDD
+sofre? Resposta: porque não existe uma cabeça de leitura física precisando se mover até a posição
+do dado — o acesso é elétrico e praticamente instantâneo, independente de onde o dado esteja
+guardado no chip.
+
+`[CLI]` No Windows, para ver o modelo e (quando disponível) o tipo de mídia do disco:
+```
+wmic diskdrive get model,size,mediatype
+```
+Ou, no PowerShell (mais moderno e detalhado):
+```
+Get-PhysicalDisk | Select FriendlyName, MediaType, Size
+```
+
 ## `[APROFUNDAMENTO]` Dispositivos de E/S: controladores
 
 A CPU não conversa diretamente com um disco ou uma placa de rede — ela conversa com um
@@ -216,6 +273,13 @@ Você já viu estes avisos ao longo do módulo — aqui vai só a revisão rápi
 - BROOKSHEAR, J. Glenn. *Ciência da Computação — Uma Visão Abrangente*, 7ª ed., Bookman, 2005 —
   Capítulos 3 e 4 (Arquitetura de Máquina / Sistemas Operacionais).
 - WHITE, Ron. *Como Funciona o Computador*, 8ª ed., Quark, 1998.
+- [Crucial — RAM vs. VRAM: What's the Difference?](https://www.crucial.com/articles/about-ram/ram-vs-vram)
+  — artigo técnico explicando a diferença entre memória do sistema e memória de vídeo.
+- [Kingston — SSD vs. HDD: What's the Difference?](https://www.kingston.com/en/blog/pc-performance/ssd-vs-hdd)
+  — comparação técnica de armazenamento mecânico x flash.
+- [Microsoft Learn — WMIC (linha de comando)](https://learn.microsoft.com/pt-br/windows/win32/wmisdk/wmic)
+  e [Get-CimInstance (PowerShell)](https://learn.microsoft.com/pt-br/powershell/module/cimcmdlets/get-ciminstance)
+  — documentação oficial dos comandos Windows usados na prática deste módulo.
 
 ## Checklist de saída
 

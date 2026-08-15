@@ -143,6 +143,10 @@ Você já viu estes avisos ao longo do módulo — aqui vai só a revisão rápi
 - TANENBAUM, Andrew S. *Sistemas Operacionais Modernos*, 2ª ed., Prentice Hall, 2007.
 - BROOKSHEAR, J. Glenn. *Ciência da Computação — Uma Visão Abrangente*, 7ª ed., Bookman, 2005 —
   Capítulo 3 (Sistemas Operacionais).
+- [The Linux Kernel documentation](https://www.kernel.org/doc/html/latest/) — documentação
+  oficial do kernel Linux.
+- [Microsoft Learn — Gerenciador de Tarefas](https://learn.microsoft.com/pt-br/windows/client-management/administrative-tools-in-windows#task-manager) —
+  documentação oficial sobre gerência de processos no Windows.
 
 ## Checklist de saída
 

@@ -136,6 +136,33 @@ cada minúscula oscilação elétrica. Para isso, eles usam um **clock**: um sin
 intervalos regulares e sincroniza *quando* o estado pode mudar. Confundir "clock" com "só
 velocidade" é outro erro comum — a função dele é sincronização, não apenas ritmo.
 
+**Exemplo narrado — a trava eletrônica com senha de 3 dígitos:** imagine uma trava que só abre
+com a senha `4-7-2`, digitada dígito por dígito num teclado. O circuito precisa "lembrar" quanto
+já foi digitado corretamente até agora — isso é o estado interno.
+
+```
+Estado inicial: "nada digitado ainda" (0 dígitos corretos confirmados)
+
+Dígito 1 digitado: 4  → confere com o 1º dígito da senha (4). Estado avança:
+                        "1 dígito correto confirmado".
+Dígito 2 digitado: 7  → confere com o 2º dígito da senha (7). Estado avança:
+                        "2 dígitos corretos confirmados".
+Dígito 3 digitado: 2  → confere com o 3º dígito da senha (2). Estado avança:
+                        "senha completa e correta" → a trava abre.
+```
+
+Repare que a trava só abre por causa da *sequência* de estados que ela acumulou — se você
+digitasse `4-7-2` fora de ordem, ou pulasse direto pro `2`, o resultado seria diferente, mesmo
+usando os mesmos três dígitos. Um circuito combinacional (como as portas lógicas vistas antes)
+nunca conseguiria fazer isso: ele só enxerga a entrada do instante atual, sem noção de "o que já
+veio antes".
+
+`[TENTE VOCÊ]` Nessa trava de 3 dígitos, o usuário digita `4-9-2` (o segundo dígito está errado).
+O que acontece com o estado interno no dígito 2, e a trava abre no final? Resposta: o estado
+"reseta" — como o dígito 2 (`9`) não confere com o esperado (`7`), o circuito volta pro estado
+"nada confirmado" (ou entra num estado de erro), e mesmo o `2` final batendo com o 3º dígito da
+senha, a trava não abre, porque a sequência como um todo não foi validada corretamente.
+
 ## `[TEORIA]` Latches e flip-flops
 
 - **Latch (SR latch)**: o circuito de memória mais simples — guarda 1 bit, e muda de estado
@@ -144,6 +171,32 @@ velocidade" é outro erro comum — a função dele é sincronização, não ape
   clock (na borda de subida ou descida do sinal) — é o bloco básico usado para construir
   registradores e memória, porque garante que todos os bits de um registrador mudem juntos, no
   mesmo instante, em vez de um de cada vez de forma imprevisível.
+
+**Exemplo narrado — a mesma entrada, dois comportamentos diferentes:** imagine que o mesmo sinal
+de entrada `D` (dado a guardar) chega tanto a um latch quanto a um flip-flop tipo D, e observe o
+que cada um guarda ao longo do tempo (`↑` marca um pulso de clock):
+
+| Momento | Entrada D | Clock | O que o **latch** guarda | O que o **flip-flop** guarda |
+|---|---|---|---|---|
+| t0 | 0 | — | 0 | 0 |
+| t1 | 1 | — | **1** (mudou na hora) | 0 (ainda não teve pulso) |
+| t2 | 0 | — | **0** (mudou na hora de novo) | 0 (ainda não teve pulso) |
+| t3 | 1 | ↑ | **1** | **1** (só agora, no pulso) |
+| t4 | 0 | — | **0** (mudou na hora) | 1 (mantém até o próximo pulso) |
+| t5 | 1 | ↑ | **1** | **1** (só agora, no pulso) |
+
+Repare: o latch "treme" a cada mudança de `D`, mesmo entre pulsos de clock — ele reflete o valor
+atual de `D` o tempo todo. O flip-flop ignora completamente o que acontece com `D` entre um pulso
+e outro, e só "olha" pra entrada exatamente no instante do pulso. É por isso que registradores
+(que precisam trocar vários bits ao mesmo tempo, de forma previsível) usam flip-flops: se
+usassem latches, cada bit poderia mudar num instante ligeiramente diferente, conforme o ruído
+elétrico de cada fio — com flip-flops, todos esperam o mesmo pulso de clock pra mudar juntos.
+
+`[TENTE VOCÊ]` Na tabela acima, se `D` mudasse de `1` para `0` bem no meio do intervalo entre t3
+e t5 (sem nenhum pulso de clock acontecendo nesse meio tempo), o que aconteceria com o valor
+guardado no flip-flop? Resposta: nada — o flip-flop mantém o valor `1` do último pulso (t3) até o
+próximo pulso de clock (t5), ignorando qualquer mudança de `D` nesse meio tempo. O latch, por
+outro lado, mudaria para `0` imediatamente.
 
 ## Erros comuns
 
@@ -166,6 +219,10 @@ Você já viu estes avisos ao longo do módulo — aqui vai só a revisão rápi
 - BROOKSHEAR, J. Glenn. *Ciência da Computação — Uma Visão Abrangente*, 7ª ed., Bookman, 2005 —
   Capítulo 2 (Armazenamento de Dados / lógica booleana).
 - WHITE, Ron. *Como Funciona o Computador*, 8ª ed., Quark, 1998.
+- [All About Circuits — Latches e Flip-Flops](https://www.allaboutcircuits.com/textbook/digital/chpt-10/latches/) —
+  explicação técnica com diagramas de tempo (em inglês).
+- [Ben Eater — Building an SR latch](https://www.youtube.com/watch?v=KM0DdEaY5sY) — vídeo
+  montando um latch com portas NOR reais, mão na massa.
 
 ## Checklist de saída
 
@@ -176,4 +233,6 @@ Você já viu estes avisos ao longo do módulo — aqui vai só a revisão rápi
 - [ ] Explico o papel do clock em um circuito sequencial — por que ele sincroniza, não só marca
       velocidade.
 - [ ] Descrevo, em termos gerais, o que um flip-flop guarda e por que ele é a base da memória.
+- [ ] Explico, com a linha do tempo latch x flip-flop, por que registradores usam flip-flops e
+      não latches.
 - [ ] Explico por que um meio-somador é só XOR + AND, e não uma porta nova.

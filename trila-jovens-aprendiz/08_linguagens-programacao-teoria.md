@@ -312,6 +312,9 @@ Você já viu estes avisos ao longo do módulo — aqui vai só a revisão rápi
 
 - SEBESTA, Robert W. *Conceitos de Linguagens de Programação*, 5ª ed., Bookman, 2003.
 - MSYS2 — documentação oficial de instalação: `https://www.msys2.org/`
+- [cppreference.com](https://en.cppreference.com/w/) — referência oficial da linguagem C++
+  (sintaxe, biblioteca padrão) — vale ter aberta enquanto pratica.
+- [MinGW-w64](https://www.mingw-w64.org/) — documentação do compilador usado no setup Windows.
 
 ## Checklist de saída
 

@@ -248,6 +248,10 @@ Você já viu estes três avisos ao longo do módulo — aqui vai só a revisão
 - BROOKSHEAR, J. Glenn. *Ciência da Computação — Uma Visão Abrangente*, 7ª ed., Bookman, 2005 —
   Capítulo 1 (Armazenamento e Manipulação de Dados).
 - VELLOSO, Fernando de Castro. *Informática: Conceitos Básicos*, 6ª ed., Campus, 2002.
+- [IEEE 754 explicado visualmente](https://float.exposed/) — ferramenta interativa que mostra bit
+  a bit como um número em ponto flutuante é armazenado.
+- [RapidTables — Conversor binário/decimal/hexadecimal](https://www.rapidtables.com/convert/number/binary-to-decimal.html) —
+  para conferir suas conversões manuais.
 
 ## Checklist de saída
 

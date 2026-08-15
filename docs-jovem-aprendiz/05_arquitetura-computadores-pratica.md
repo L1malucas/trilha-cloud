@@ -37,10 +37,14 @@ Explique, para cada salto na hierarquia, qual o trade-off entre velocidade e cap
 `[CLI]` Rode no terminal:
 - Linux: `lscpu` (informações da CPU) e `free -h` (memória).
 - Mac: `sysctl -n machdep.cpu.brand_string` (CPU) e `vm_stat` (memória).
-- Windows: `systeminfo` no PowerShell, ou o Gerenciador de Tarefas na aba Desempenho.
+- Windows: `systeminfo` (Prompt de Comando) para uma visão geral, ou de forma mais específica:
+  `wmic cpu get name` (CPU), `wmic diskdrive get model,size,mediatype` (disco, incluindo se é
+  HDD ou SSD quando disponível), e `dxdiag` (ferramenta gráfica, aba "Display") para a GPU/VRAM.
+  No PowerShell, o equivalente mais moderno é `Get-CimInstance Win32_Processor | Select Name` e
+  `Get-PhysicalDisk | Select FriendlyName, MediaType, Size`.
 
 Cole a saída relevante e identifique, na saída, pelo menos 2 informações que apareceram na
-teoria (ex: número de núcleos, clock, quantidade de memória).
+teoria (ex: número de núcleos, clock, quantidade de memória, tipo de disco HDD/SSD).
 
 ### 5. Desafio
 

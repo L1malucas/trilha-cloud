@@ -256,6 +256,8 @@ Você já viu estes avisos ao longo do módulo — aqui vai a revisão:
   [Node.js — fs/promises](https://nodejs.org/api/fs.html#promises-api),
   [Node.js — readline](https://nodejs.org/api/readline.html),
   [Node.js — Event Loop, Timers e process.nextTick()](https://nodejs.org/en/docs/guides/event-loop-timers-and-nexttick/).
+- [Node.js — Documentação completa](https://nodejs.org/docs/latest/api/)
+- [MDN — JavaScript](https://developer.mozilla.org/pt-BR/docs/Web/JavaScript)
 
 ## Checklist de saída
 
