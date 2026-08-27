@@ -108,11 +108,6 @@ const config = {
             position: 'left',
           },
           {
-            href: 'https://l1malucas.github.io/trilha-jovem-aprendiz/',
-            label: 'Jovem Aprendiz',
-            position: 'left',
-          },
-          {
             href: `https://github.com/${GITHUB_USER}/${REPO_NAME}`,
             label: 'GitHub',
             position: 'right',
