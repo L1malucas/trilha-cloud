@@ -1,11 +1,11 @@
 ---
 id: "00_preparando_o_ambiente_wsl"
-title: "Módulo 00 — Preparando o ambiente: WSL2 no Windows"
-sidebar_label: "00 · Preparando o ambiente (WSL)"
+title: "Módulo 00 — Instalando e configurando o WSL2 no Windows"
+sidebar_label: "00 · Instalando o WSL2"
 sidebar_position: 0
 ---
 
-# Módulo 00 — Preparando o ambiente: WSL2 no Windows
+# Módulo 00 — Instalando e configurando o WSL2 no Windows
 
 > **Objetivo**: instalar um Linux de verdade dentro do Windows (WSL2), configurá-lo para estudo e criar o laboratório que será usado em **todos** os módulos desta trilha — com a trilha numa tela e o terminal Linux na outra.
 >

@@ -23,7 +23,7 @@ Os espaços marcados com `[PRINT]` são capturas de tela que ainda serão adicio
 
 ### Base (LPIC-1 / Linux+)
 
-* [Módulo 00: Preparando o ambiente — WSL2 no Windows](./00_preparando_o_ambiente_wsl.md) — instalação, systemd, laboratório e snapshots
+* [Módulo 00: Instalando e configurando o WSL2 no Windows](./00_preparando_o_ambiente_wsl.md) — instalação, systemd, laboratório e snapshots
 * [Módulo 01: Fundamentos e Distribuições](./01_fundamentos_e_distribuicoes.md) — kernel x userland, famílias, licenças, FHS
 * [Módulo 02: Linha de Comando e Shell](./02_linha_de_comando_e_shell.md) — bash, navegação, redirecionamento, pipes, variáveis, aliases, `man`
 * [Módulo 03: Arquivos e Diretórios](./03_arquivos_e_diretorios.md) — `cp`, `mv`, `find`, links, `tar`/`gzip`
