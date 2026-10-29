@@ -112,6 +112,27 @@ const config = {
     ],
   ],
 
+  plugins: [
+    ['@docusaurus/plugin-content-docs', {
+      id: 'azure',
+      routeBasePath: 'azure',
+      path: 'docs/azure',
+      sidebarPath: './sidebarsAzure.js',
+    }],
+    ['@docusaurus/plugin-content-docs', {
+      id: 'gcp',
+      routeBasePath: 'gcp',
+      path: 'docs/gcp',
+      sidebarPath: './sidebarsGcp.js',
+    }],
+    ['@docusaurus/plugin-content-docs', {
+      id: 'linux',
+      routeBasePath: 'linux',
+      path: 'docs/linux',
+      sidebarPath: './sidebarsLinux.js',
+    }],
+  ],
+
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
@@ -119,17 +140,29 @@ const config = {
         respectPrefersColorScheme: true,
       },
       navbar: {
-        title: 'Trilha AWS',
+        title: 'Trilha Cloud',
         items: [
-          {
-            type: 'docSidebar',
-            sidebarId: 'tutorialSidebar',
-            position: 'left',
-            label: 'Trilha AWS',
-          },
           {
             type: 'docsVersionDropdown',
             position: 'left',
+          },
+          {
+            to: '/azure/',
+            label: 'Azure',
+            position: 'left',
+            activeBaseRegex: '^/trilha-cloud/azure',
+          },
+          {
+            to: '/gcp/',
+            label: 'GCP',
+            position: 'left',
+            activeBaseRegex: '^/trilha-cloud/gcp',
+          },
+          {
+            to: '/linux/',
+            label: 'Linux',
+            position: 'left',
+            activeBaseRegex: '^/trilha-cloud/linux',
           },
           {
             href: `https://github.com/${GITHUB_USER}/${REPO_NAME}`,
