@@ -62,6 +62,8 @@ python3 -c "import ipaddress as i; n=i.ip_network('10.10.0.0/16'); print(list(n.
 
 > `[TENTE VOCÊ]` Quantos hosts úteis tem `192.168.10.0/26`? Resposta: 2^(32−26) − 2 = 2^6 − 2 = **62**.
 
+> `[TENTE VOCÊ]` O host `10.10.3.77` pertence à rede `10.10.2.0/23`? Raciocínio: um `/23` tem 9 bits de host (2^9 = 512 endereços), ou seja, ocupa **dois** blocos de 256 seguidos: do terceiro octeto `2` ao `3`, indo de `10.10.2.0` a `10.10.3.255`. Como `3.77` está dentro dessa faixa, a resposta é sim. Confirme: `python3 -c "import ipaddress as i; print(i.ip_address('10.10.3.77') in i.ip_network('10.10.2.0/23'))"` imprime `True`. Para ver o tamanho de um bloco qualquer: `python3 -c "import ipaddress as i; print(i.ip_network('10.0.5.0/27').num_addresses - 2)"` imprime `30`.
+
 Faixas **privadas** (RFC 1918): `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`. **Sobreposição** de faixas impede conectar redes (peering/VPN) — por isso planeja-se o endereçamento antes de criar VNets/VPCs.
 
 ## DNS e DHCP
@@ -75,6 +77,8 @@ dig exemplo.com MX +short
 dig -x 8.8.8.8 +short                 # DNS reverso (PTR)
 sudo dhclient -v eth0                  # (em máquina com DHCP) pedir/renovar lease
 ```
+
+> `[TENTE VOCÊ]` O que diferencia um 404 de um "connection refused"? Raciocínio: o 404 é a resposta de um servidor vivo (camada 7 funcionando); o *refused* acontece antes, na camada 4, quando ninguém escuta na porta. Rode `python3 -m http.server 8123 --directory /tmp & SP=$!; sleep 1; curl -s -o /dev/null -w "%{http_code}\n" localhost:8123/x; kill $SP; sleep 1; curl -sS localhost:8123/ 2>&1 | head -1`. Resposta: `404` (servidor vivo, caminho errado) e depois `curl: (7) Failed to connect to localhost port 8123 ...: Connection refused` (servidor morto).
 
 ## HTTP e HTTPS
 
@@ -119,6 +123,10 @@ openssl verify -CAfile ca.crt servidor.crt          # servidor.crt: OK
 
 Você acaba de reproduzir o que o Let's Encrypt faz em escala: um cliente gera a chave e um **CSR**, a CA valida e **assina**.
 
+> `[TENTE VOCÊ]` O certificado da sua CA assina a si mesmo? Raciocínio: numa CA raiz o *subject* (quem é) e o *issuer* (quem assinou) são o mesmo, porque ninguém acima dela assina; é por isso que a raiz precisa ser instalada como "confiável" manualmente. Rode `openssl x509 -in ~/lab/ca/ca.crt -noout -subject -issuer`. Resposta: duas linhas iguais, `subject=CN = Minha CA do Lab` e `issuer=CN = Minha CA do Lab`. Rode o mesmo para `servidor.crt` e o *issuer* passa a ser a CA.
+
+> `[ATENÇÃO]` Sem o SAN, o certificado "funciona" no `openssl verify` e **falha** no navegador e no `curl`. Se você esquecer o `-extfile ext.cnf` no passo de assinatura, o erro aparecerá só na hora de usar (`certificate subject name 'app.lab' does not match target host name`), longe de onde nasceu. Confira sempre com `openssl x509 -in servidor.crt -noout -ext subjectAltName`.
+
 ## NAT, roteamento e VLAN
 
 - **NAT** (*Network Address Translation*): traduz IPs privados para um público na saída (e **PAT**/masquerade, que multiplexa por porta). É o que permite sua rede 192.168.x navegar com **um** IP público.
@@ -133,6 +141,8 @@ sudo nft add table ip nat
 sudo nft add chain ip nat postrouting '{ type nat hook postrouting priority 100; }'
 sudo nft add rule ip nat postrouting oifname "eth0" masquerade
 ```
+
+> `[ATENÇÃO]` Ligar `ip_forward=1` **não** faz NAT: o kernel passa a encaminhar pacotes, mas eles sairão com o IP privado de origem e a resposta nunca volta. Para a rede privada navegar, falta a regra `masquerade` do `nft`. E o contrário também vale: `masquerade` sem `ip_forward` não encaminha nada. São duas peças separadas, uma de roteamento e uma de tradução.
 
 ## VPN, proxy reverso e balanceadores
 
@@ -183,6 +193,8 @@ for i in 1 2 3 4; do curl -s localhost:8080 | head -1; done
 
 Derrube um backend e veja o HAProxy tirá-lo de rotação (health check).
 
+> `[ATENÇÃO]` Nas chaves do WireGuard, `AllowedIPs` faz **duas** coisas: filtra de quais IPs aceita tráfego do par e define para quais destinos o tráfego é enviado a ele (é uma tabela de roteamento). Um `AllowedIPs` errado dá o sintoma "o túnel sobe (`wg show` mostra handshake), mas o ping não passa".
+
 ## Ferramentas de diagnóstico: o que usar para cada pergunta
 
 | Pergunta | Ferramenta |
@@ -212,11 +224,50 @@ Crie a CA do lab, assine um certificado para `app.lab` com SAN, instale no Nginx
 ### Lab 4 — Balanceamento
 Suba o HAProxy com 2 backends, observe o round-robin e derrube um.
 
+### Lab 5 — Detector de sobreposição de redes
+Cenário: o time de nuvem vai conectar quatro redes e precisa saber, antes de criar o peering, se há faixas que colidem. Use o que já sabe de Python (Módulo 11) e CIDR.
+```bash
+python3 - <<'PY'
+import ipaddress as ip
+redes = ["10.10.0.0/16", "10.20.0.0/16", "10.10.5.0/24", "192.168.1.0/24"]
+nets = [ip.ip_network(r) for r in redes]
+for i, a in enumerate(nets):
+    for b in nets[i+1:]:
+        if a.overlaps(b):
+            print(f"SOBREPOSTA: {a} x {b}")
+PY
+```
+Resposta esperada: uma única linha, `SOBREPOSTA: 10.10.0.0/16 x 10.10.5.0/24` (a segunda está dentro da primeira). Troque a lista pelas faixas do seu planejamento do Lab 1.
+
+### Lab 6 — Recusado ou silêncio? Dois defeitos, dois sintomas
+Cenário: o chamado diz "não conecta". Você precisa distinguir *quem está fora* de *quem está bloqueado*, e a mensagem de erro é a pista.
+```bash
+sudo apt install -y netcat-openbsd
+python3 -m http.server 8001 --directory /tmp & SP=$!; sleep 1
+nc -zv 127.0.0.1 8001                          # succeeded! (alguém escuta)
+kill $SP; sleep 1
+nc -zv 127.0.0.1 8001                          # Connection refused (ninguém escuta, o RST volta na hora)
+nc -zv -w 2 203.0.113.1 80                     # timed out (o pacote some no caminho; faixa de documentação RFC 5737)
+```
+*Refused* = a máquina respondeu "não tem ninguém aqui" (serviço parado ou porta errada). *Timed out* = silêncio (firewall descartando, rota inexistente, host desligado). A diferença muda completamente o próximo passo.
+
+### Lab 7 — Round-robin contado e failover
+Cenário: o HAProxy do Lab 4 precisa de prova numérica de que distribui igualmente e de que tira o backend morto de rotação. Dê a cada backend uma identidade:
+```bash
+mkdir -p ~/lab/api1 ~/lab/api2
+echo servidor-1 > ~/lab/api1/index.html && echo servidor-2 > ~/lab/api2/index.html
+for i in $(seq 1 100); do curl -s localhost:8080; done | sort | uniq -c      # 50 servidor-1 e 50 servidor-2
+pkill -f "http.server 8001"; sleep 7                                         # o health check precisa de alguns ciclos
+for i in $(seq 1 100); do curl -s localhost:8080; done | sort | uniq -c      # 100 servidor-2
+```
+O `sleep 7` não é decoração: o HAProxy só marca o backend como fora depois de algumas verificações consecutivas com falha. Antes disso, algumas requisições voltam `503`. É a razão de calibrar `inter`, `fall` e `rise` em produção.
+
 ### Desafios
 
 - **Desafio 1:** rede de **3 segmentos** com namespaces (`lan1`, `lan2`, `router`), roteador Linux (`ip_forward`) e **NAT** com `nft` para uma "saída para a internet" simulada.
 - **Desafio 2:** túnel **WireGuard** entre dois namespaces; prove com `tcpdump` que o tráfego no meio está cifrado.
 - **Desafio 3:** explique, camada por camada, tudo que acontece quando você digita `https://exemplo.com` no navegador (DNS, TCP, TLS, HTTP).
+- **Desafio 4:** emita, com a CA do Lab 3, um certificado válido para **dois** nomes (`app.lab` e `www.app.lab`) e prove que o `curl` aceita os dois nomes apontando para o seu Nginx (use `--resolve` ou entradas no `/etc/hosts`), mas rejeita um terceiro nome (`outro.lab`). **Verifique:** `openssl x509 -in ~/lab/ca/servidor.crt -noout -ext subjectAltName` mostra `DNS:app.lab, DNS:www.app.lab`; `curl --cacert ~/lab/ca/ca.crt https://www.app.lab/` responde normalmente e, com o terceiro nome, termina com `curl: (60) SSL: no alternative certificate subject name matches target host name 'outro.lab'`.
 
 ## Erros comuns nesta fase
 
@@ -226,6 +277,49 @@ Suba o HAProxy com 2 backends, observe o round-robin e derrube um.
 - Diagnosticar só pelo `ping` (ICMP pode estar bloqueado e o serviço estar ok).
 - Confundir NAT (tradução) com firewall (filtragem).
 - Esquecer o health check no balanceador.
+- Confundir "connection refused" (ninguém escutando, resposta imediata) com "timed out" (pacote descartado no caminho): a causa e o próximo passo são opostos.
+- Esquecer que `AllowedIPs` no WireGuard também é roteamento: túnel "de pé" não significa tráfego passando.
+- Testar balanceador e proxy só por `localhost` e nunca pelo nome real que o cliente usa (o `Host` e o SNI mudam qual `server` responde).
+
+## Ponte com módulos anteriores
+
+| Vem de | Como reaparece aqui |
+|---|---|
+| Módulo 09 — `ip`, `ss`, `dig`, `curl`, `tcpdump` | A "escada" de diagnóstico é a pilha OSI subindo, camada a camada |
+| Módulo 10 — firewall (`nft`/`ufw`) | NAT e `masquerade` usam o mesmo `nft`; NAT traduz, firewall filtra |
+| Módulo 11 — shell script e Python | Cálculo de CIDR, detector de sobreposição, laços de teste de carga |
+| Módulo 12 — logs | Logs do Nginx e do HAProxy mostram o caminho real das requisições |
+| Módulo 13 — `sysctl` | `net.ipv4.ip_forward` é o que transforma uma máquina Linux em roteador |
+| Módulo 14 — network namespaces | O laboratório de redes (hosts, roteador, túnel) sem hardware algum |
+| Módulo 17 — Nginx, TLS, DNS | Instalar o certificado da CA do lab, balancear e resolver nomes |
+
+### Lab 8 — Seguindo uma requisição HTTPS de ponta a ponta (integrador)
+Cenário: `https://app.lab` entra no Nginx com TLS (certificado da **sua** CA), é repassada ao HAProxy e cai em um dos dois backends. Você mede e enxerga cada camada. Pré-requisitos: a CA e o `servidor.crt` do Lab 3, o HAProxy com os dois backends (Labs 4 e 7) e o Nginx do Módulo 17.
+```bash
+sudo cp ~/lab/ca/servidor.crt /etc/nginx/ssl/app.crt
+sudo cp ~/lab/ca/servidor.key /etc/nginx/ssl/app.key && sudo chmod 600 /etc/nginx/ssl/app.key
+sudo tee /etc/nginx/sites-available/app >/dev/null <<'EOF'
+server {
+    listen 443 ssl;
+    server_name app.lab;
+    ssl_certificate     /etc/nginx/ssl/app.crt;
+    ssl_certificate_key /etc/nginx/ssl/app.key;
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+EOF
+sudo ln -sf /etc/nginx/sites-available/app /etc/nginx/sites-enabled/app
+sudo nginx -t && sudo systemctl reload nginx
+echo "127.0.0.1 app.lab" | sudo tee -a /etc/hosts
+# suba os dois backends de novo se tiver derrubado um (Lab 7)
+for i in 1 2 3 4; do curl -s --cacert ~/lab/ca/ca.crt https://app.lab/; done      # alterna servidor-1 / servidor-2
+curl -sS --cacert ~/lab/ca/ca.crt -o /dev/null -w "http=%{http_code} dns=%{time_namelookup} tcp=%{time_connect} tls=%{time_appconnect} total=%{time_total}\n" https://app.lab/
+curl -sS https://app.lab/                                                          # sem --cacert: erro de verificação
+```
+A leitura: `dns` quase zero (entrada no `/etc/hosts`, Módulo 09); `tcp` e `tls` pequenos (mesma máquina), mas o `tls` é bem maior que o `tcp` porque inclui o handshake com a sua CA; o último comando falha com `certificate verify failed` exatamente por não confiar na CA do lab. Passam por aqui camada 3 a 7: IP (127.0.0.1), TCP (handshake), TLS (CA e SAN), HTTP (Nginx -> HAProxy -> backend).
 
 ## Conexão com os módulos seguintes
 

@@ -40,6 +40,10 @@ find .git/objects -type f | head          # os objetos armazenados
 
 > `[TEORIA]` Como o commit referencia seu pai pelo hash, **alterar um commit antigo muda todos os hashes seguintes**: é por isso que reescrever histórico publicado (`rebase`/`push --force`) é perigoso e deve ser evitado em branches compartilhadas.
 
+> `[TENTE VOCÊ]` Dois commits com exatamente o mesmo conteúdo e a mesma mensagem têm o mesmo hash? Resposta: não. O hash do commit inclui também o pai, o autor e a data; então, na prática, só dá igual se tudo isso for igual. Já o **blob** (só o conteúdo do arquivo) é idêntico: `git hash-object a.txt` sempre devolve o mesmo hash para o mesmo texto, em qualquer máquina.
+
+> `[TENTE VOCÊ]` Quanto "pesa" criar uma branch? Resposta: quase nada. Rode `git branch teste && cat .git/refs/heads/teste` e você vê um arquivo de ~41 bytes com um hash. Compare com `cat .git/refs/heads/main`: é o mesmo hash, porque as duas apontam para o mesmo commit.
+
 ## Merge x rebase
 
 As duas formas de integrar o trabalho de uma branch em outra:
@@ -69,6 +73,10 @@ git rebase -i HEAD~3          # abre o editor: pick, reword, squash, fixup, drop
 
 > `[ATENÇÃO]` Se um rebase der errado, **não entre em pânico**: `git rebase --abort` volta ao início, e `git reflog` mostra onde a branch estava antes. Quase nada no Git é perdido de vez em até ~90 dias.
 
+> `[TENTE VOCÊ]` Como saber se uma branch já foi publicada antes de fazer rebase nela? Resposta: `git branch -vv` mostra o upstream (`[origin/feature]`) de cada branch; se tem upstream e outras pessoas podem ter puxado, use `merge`. Sem upstream, a branch é só sua e o rebase é seguro.
+
+> `[ATENÇÃO]` Durante um `rebase`, os papéis de "ours" e "theirs" nos conflitos **invertem**: "ours" é a branch sobre a qual você está reaplicando (ex.: `main`) e "theirs" são os seus commits. É a origem de muita resolução de conflito feita ao contrário.
+
 ## Ferramentas de investigação e salvamento
 
 ```bash
@@ -85,6 +93,10 @@ git diff main..feature --stat
 ```
 
 O `bisect` acha, em ~log₂(N) passos, o commit que introduziu um bug entre centenas — poderosíssimo.
+
+> `[TENTE VOCÊ]` Você mexeu em 3 arquivos, mas precisa trocar de branch agora para um hotfix. Como guardar tudo sem commitar, incluindo arquivos novos (não rastreados)? Resposta: `git stash push -u -m "wip"`. O `-u` inclui os untracked; sem ele, os arquivos novos ficam para trás. Depois do hotfix, `git stash pop`.
+
+> `[TENTE VOCÊ]` Como achar quem escreveu uma linha e por quê? Resposta: `git blame -L 10,20 arquivo` mostra o commit de cada linha do intervalo; com o hash em mãos, `git show <hash>` traz a mensagem e o contexto completo.
 
 ## Trabalho em equipe: Pull Requests e revisão
 
@@ -134,6 +146,8 @@ Hooks locais não vão para o repositório; para compartilhar, use o framework *
 
 Benefícios: auditoria completa ("quem mudou o quê e por quê"), rollback trivial, ambientes reproduzíveis, e **ninguém** precisa de acesso direto de escrita ao cluster. É o assunto dos Módulos 22 e 23; aqui, o fundamento: **tudo que importa está no Git**.
 
+> `[TENTE VOCÊ]` Seu pipeline de GitOps aplicou uma mudança ruim em produção. Qual o rollback correto numa `main` compartilhada? Resposta: `git revert <hash>` — cria um commit novo que desfaz o anterior, sem reescrever o histórico, e o agente (Argo CD/Flux) converge de volta. `git reset --hard` + `push --force` reescreveria a história que outras pessoas e o agente já viram.
+
 ![Grafo do Git após rebase e fast-forward, mostrando histórico linear](screenshots/19-git-e-gitops/01-rebase-grafo-linear.png)
 > `[PRINT]` Passo a passo para capturar: após o lab de rebase, rodar `git log --oneline --graph --all`. Capturar o histórico linear.
 
@@ -154,11 +168,71 @@ Crie 15 commits, introduza um bug no 9º (um teste que falha) e ache o commit co
 ### Lab 5 — Fluxo de PR real
 No GitHub: proteja a `main`, abra um PR de uma branch com 2 commits, peça revisão (a si mesmo/colega), faça *squash merge*.
 
+### Lab 6 — Conflito de merge resolvido sem pânico
+Cenário: duas pessoas mudaram a mesma linha de um arquivo de configuração.
+
+```bash
+cd ~/lab && rm -rf git-conflito && mkdir git-conflito && cd git-conflito && git init -q -b main
+printf 'porta=8080\nambiente=dev\n' > app.conf && git add . && git commit -qm "config base"
+git switch -qc ajuste-porta && sed -i 's/8080/9090/' app.conf && git commit -qam "porta 9090"
+git switch -q main && sed -i 's/8080/8000/' app.conf && git commit -qam "porta 8000"
+git merge ajuste-porta || true     # CONFLITO esperado
+git status --short                 # UU app.conf
+cat app.conf                       # veja os marcadores <<<<<<< ======= >>>>>>>
+```
+
+Edite o `app.conf` deixando `porta=9090` e sem marcadores, depois `git add app.conf && git commit -m "resolve conflito de porta"`. Confira com `git log --oneline --graph`. Se quiser desistir no meio, `git merge --abort`.
+
+### Lab 7 — Release com SemVer, tags e changelog
+Cenário: o time fecha a versão 1.0.0, faz uma correção e uma funcionalidade nova.
+
+```bash
+cd ~/lab && rm -rf git-release && mkdir git-release && cd git-release && git init -q -b main
+echo "v1" > app.txt && git add . && git commit -qm "feat: primeira versão"
+git tag -a v1.0.0 -m "Release 1.0.0"
+echo "fix" >> app.txt && git commit -qam "fix: corrige cálculo do frete"
+git tag -a v1.0.1 -m "Patch"
+echo "novo" >> app.txt && git commit -qam "feat: adiciona cupom de desconto"
+git tag -a v1.1.0 -m "Minor"
+git tag -n                                              # lista tags com a mensagem
+git log --pretty="- %s" v1.0.0..v1.1.0                  # changelog entre versões
+git describe --tags                                     # v1.1.0
+```
+
+Pergunta de raciocínio: por que a segunda tag é `1.0.1` e não `1.1.0`? (Era só `fix:`, compatível, então PATCH.)
+
+### Lab 8 — Hotfix com cherry-pick e stash
+Cenário: um bug foi corrigido na `main`, mas a `release` em produção também precisa da correção, e você está no meio de outra tarefa.
+
+```bash
+cd ~/lab && rm -rf git-hotfix && mkdir git-hotfix && cd git-hotfix && git init -q -b main
+echo "v1" > app.txt && git add . && git commit -qm "base"
+git branch release
+echo "wip" > rascunho.txt                  # trabalho em andamento
+echo "corrigido" >> app.txt && git commit -qam "fix: corrige bug crítico"
+HASH=$(git rev-parse --short HEAD)
+git stash push -u -m "rascunho"           # guarda o trabalho em andamento
+git switch -q release && git cherry-pick "$HASH"
+git log --oneline                          # o fix agora também está na release
+git switch -q main && git stash pop
+```
+
 ### Desafios
 
 - **Desafio 1:** hook `pre-commit` que roda `shellcheck` nos scripts alterados e barra o commit se houver erro.
 - **Desafio 2:** crie uma tag `v1.0.0` anotada, outra `v1.1.0` após um commit `feat:`, e gere um changelog simples com `git log --pretty="- %s" v1.0.0..v1.1.0`.
 - **Desafio 3:** descreva, em um diagrama de texto, o fluxo GitOps de um deploy: dev → PR → CI → merge → agente → cluster.
+- **Desafio 4:** num repositório novo, crie 3 branches de feature e integre uma com `merge --no-ff`, outra com `rebase` + `merge --ff-only` e a terceira com `merge --squash`. Compare os grafos.
+
+  **Verifique:** `git log --oneline --graph | head -12` mostra um losango (merge), um trecho linear (rebase) e um único commit de squash, sem os commits intermediários da terceira feature.
+
+- **Desafio 5:** escreva um hook `commit-msg` que rejeite mensagens fora do padrão Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`).
+
+  **Verifique:** `git commit --allow-empty -m "mexi em coisa"; echo $?` imprime a mensagem de erro e `1`; já `git commit --allow-empty -m "fix: ajusta timeout"; echo $?` imprime `0`.
+
+- **Desafio 6:** use `git bisect run` com um script que testa `grep -q 'ok' status.txt` num histórico de 20 commits em que o bug entrou no 13º.
+
+  **Verifique:** o bisect termina com `<hash> is the first bad commit` apontando para o commit 13 (confira com `git log --oneline | sed -n '8p'`, já que o log lista do mais novo para o mais antigo).
 
 ## Erros comuns nesta fase
 
@@ -168,6 +242,44 @@ No GitHub: proteja a `main`, abra um PR de uma branch com 2 commits, peça revis
 - Commitar segredos e achar que apagar resolve.
 - Achar que o Git guarda "diferenças" (guarda *snapshots*).
 - Trabalhar sem branch protection na `main`.
+- Resolver conflito deixando os marcadores `<<<<<<<` no arquivo e commitando assim (rode `grep -rn '<<<<<<<' .` antes do commit).
+- Usar `git reset --hard` + `push --force` para desfazer algo já publicado, em vez de `git revert`.
+- Esquecer o `-u` no `git stash` e deixar arquivos novos para trás.
+
+## Ponte com módulos anteriores
+
+| Vem de | Como reaparece aqui |
+|---|---|
+| Módulo 15 (Git básico, IaC) | `add`, `commit`, `branch` viram a base para rebase, tags e PRs |
+| Módulo 11 (shell script) | Hooks são shell scripts; o `bisect run` espera o código de saída `0`/`≠0` |
+| Módulo 04 (texto) | `grep -E` dentro do hook e `git log -S`/`--pretty` filtram e formatam histórico |
+| Módulo 12 (logs) | `git log` e `reflog` são o "log de auditoria" do repositório |
+
+### Lab integrador — Repositório de scripts com hook e release
+Reutilize os dados do `~/lab` e o shell do módulo 11 para montar um mini repositório de automação com checagem local.
+
+```bash
+cd ~/lab && rm -rf git-integrador && mkdir git-integrador && cd git-integrador && git init -q -b main
+cat > relatorio.sh <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+LOG=${1:-$HOME/lab/dados/access.log}
+awk '{print $9}' "$LOG" | sort | uniq -c | sort -rn
+EOF
+chmod +x relatorio.sh
+cat > .git/hooks/pre-commit <<'EOF'
+#!/usr/bin/env bash
+for f in $(git diff --cached --name-only --diff-filter=AM | grep '\.sh$' || true); do
+  bash -n "$f" || { echo "ERRO de sintaxe em $f"; exit 1; }
+done
+EOF
+chmod +x .git/hooks/pre-commit
+git add . && git commit -qm "feat: relatório de status HTTP" && git tag -a v0.1.0 -m "primeira versão"
+echo 'if [ then' >> relatorio.sh && git commit -qam "fix: quebra proposital"   # deve ser barrado
+git checkout -- relatorio.sh && ./relatorio.sh | head -3
+```
+
+O hook usa `bash -n` (checa sintaxe sem executar), o script usa `awk` do módulo 04 e a tag marca a versão. O commit quebrado é barrado antes de entrar no histórico.
 
 ## Conexão com os módulos seguintes
 

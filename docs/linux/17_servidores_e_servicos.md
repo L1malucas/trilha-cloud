@@ -62,6 +62,10 @@ curl http://meusite.lab
 
 Cada `server { }` é um **virtual host**: o Nginx escolhe qual atende pelo cabeçalho `Host`. `sites-available` guarda configurações; `sites-enabled` tem links para as ativas.
 
+> `[TENTE VOCÊ]` Como o Nginx escolhe o virtual host? Raciocínio: ele compara o cabeçalho `Host` da requisição com os `server_name`; o IP e a porta são iguais para todos. Então dá para testar sem mexer no `/etc/hosts`: rode `curl -s -H "Host: meusite.lab" http://127.0.0.1` e depois `curl -sI http://127.0.0.1 | head -1`. Resposta: o primeiro devolve `<h1>Meu site no Nginx</h1>` (casou com o `server_name`); o segundo responde `HTTP/1.1 200 OK` com a página padrão do Nginx, porque sem `Host` conhecido a requisição cai no servidor *default*.
+
+> `[ATENÇÃO]` Se o seu site novo "não aparece" e você vê a página de boas-vindas do Nginx, o suspeito número um é o `sites-enabled/default` capturando a requisição (ou um `server_name` com erro de digitação). Confira com `sudo nginx -T | grep -E "server_name|listen"`, que despeja a configuração **efetiva** já carregada.
+
 ### Proxy reverso: o porteiro na frente da aplicação
 
 Um **proxy reverso** recebe as requisições e as encaminha para uma aplicação interna. É a peça mais usada em produção: termina TLS, faz balanceamento, cache e protege a aplicação.
@@ -96,6 +100,8 @@ Acrescente mais linhas `server` no `upstream` para **balancear** entre várias i
 
 > `[ATENÇÃO]` Em proxy reverso, a aplicação enxerga o IP do **Nginx**, e não o do cliente. Por isso se repassam `X-Real-IP`/`X-Forwarded-For`, e a aplicação precisa ser configurada para confiar neles.
 
+> `[TENTE VOCÊ]` O proxy reverso passa o erro da aplicação ou inventa o seu? Raciocínio: com a API de pé, um caminho inexistente é problema do cliente (4xx) e vem da aplicação; com a API fora, o Nginx não tem a quem perguntar, e o erro é dele (5xx). Rode `curl -s -o /dev/null -w "%{http_code}\n" http://api.lab/inexistente`, depois `pkill -f "http.server 5000"` e repita o `curl`. Resposta: primeiro `404` (veio do Python), depois `502` (Bad Gateway: o Nginx funciona, o *upstream* não). Em produção, **502 = olhe a aplicação, não o Nginx**.
+
 ## TLS/HTTPS com openssl
 
 **TLS** criptografa a conexão e prova a identidade do servidor por um **certificado**, assinado por uma Autoridade Certificadora (CA). Para estudo, geramos um certificado **autoassinado**:
@@ -127,6 +133,8 @@ Em produção, use **Let's Encrypt** (`certbot`, gratuito e automático) em vez 
 
 > `[ATENÇÃO]` A **chave privada** (`.key`) deve ter permissão `600` e nunca ser versionada. Certificado **expirado** derruba serviços em produção silenciosamente: monitore a validade (`openssl x509 -enddate`).
 
+> `[TENTE VOCÊ]` Quando o certificado vence? Raciocínio: `-checkend N` pergunta ao `openssl` se o certificado ainda estará válido daqui a N segundos, e a resposta vem no texto e no código de saída (ótimo para scripts de monitoramento). Rode `openssl x509 -in /etc/nginx/ssl/meusite.crt -noout -checkend $((30*86400)); echo $?`. Resposta: `Certificate will not expire` e `0` (o seu vale 365 dias). Troque por `$((400*86400))` e verá `Certificate will expire` e `1`.
+
 ## DNS: dnsmasq e BIND (conceito)
 
 Um servidor DNS responde "qual o IP deste nome?". Para laboratório e redes pequenas, **dnsmasq** é leve (DNS + DHCP); em redes grandes, **BIND9** (`named`).
@@ -139,6 +147,8 @@ dig @127.0.0.1 intranet.lab +short            # 10.10.10.10
 ```
 
 Conceitos para a prova: **zona**, **registros** (A, AAAA, CNAME, MX, NS, TXT, PTR), **servidor autoritativo** x **recursivo/cache**, TTL.
+
+> `[TENTE VOCÊ]` O `address=/intranet.lab/...` vale só para o nome exato? Raciocínio: no dnsmasq essa diretiva cobre o domínio **e todos os subdomínios**, o que é prático para um laboratório. Rode `dig @127.0.0.1 qualquer.coisa.intranet.lab +short` e `dig @127.0.0.1 outrodominio.lab +short`. Resposta: o primeiro devolve `10.10.10.10`; o segundo vem vazio (ou é encaminhado ao DNS upstream), porque não casa com a regra.
 
 ## NFS e Samba: compartilhar arquivos
 
@@ -205,6 +215,8 @@ Configuração: `/etc/postgresql/<versão>/main/postgresql.conf` (escutar em out
 
 > `[ATENÇÃO]` Nunca coloque senhas em linha de comando ou scripts versionados; use `~/.pgpass`, variáveis de ambiente ou um cofre de segredos (Módulo 25). E não exponha o banco em `0.0.0.0` sem firewall e `pg_hba.conf` restritivo.
 
+> `[TENTE VOCÊ]` Quanto custa o catálogo todo? Raciocínio: em vez de baixar as linhas e somar no shell, deixe o banco agregar. Rode `sudo -u postgres psql -d catalogo -c "SELECT sum(preco) FROM produtos;"`. Resposta: uma tabela de uma linha com `89.80` (59,90 da Camiseta + 29,90 da Caneca). O mesmo princípio dos pipes do Módulo 04: processe perto de onde o dado mora.
+
 ![Navegador/terminal exibindo a resposta do Nginx servindo o site via HTTPS e o proxy reverso para a API](screenshots/17-servidores-e-servicos/01-nginx-https-proxy.png)
 > `[PRINT]` Passo a passo para capturar: rodar `curl -k https://meusite.lab` e `curl http://api.lab/health.json`. Capturar as duas respostas.
 
@@ -232,11 +244,51 @@ Crie usuário, banco e tabela; faça `pg_dump`, destrua o banco e **restaure**, 
 ### Lab 4 — Compartilhamento
 Exporte um diretório por NFS (ou Samba) e monte-o noutro ponto, gravando um arquivo pelo ponto montado.
 
+### Lab 5 — Lendo o access log do Nginx
+Cenário: o time de produto jura que "ninguém acessa `/nao-existe`", e você vai provar com o log. Com a API do `api.lab` de pé (se a matou no teste do `502`, suba-a de novo: `cd ~/lab/api && python3 -m http.server 5000 &`):
+```bash
+for i in $(seq 1 20); do curl -s -o /dev/null http://api.lab/health.json; done
+for i in 1 2 3; do curl -s -o /dev/null http://api.lab/nao-existe; done
+sudo awk '$7 ~ /nao-existe/ {print $9}' /var/log/nginx/access.log | sort | uniq -c       # 3 404
+sudo awk '{print $9}' /var/log/nginx/access.log | sort | uniq -c | sort -rn | head -3    # ranking de status
+```
+O formato padrão do Nginx tem o mesmo desenho do `access.log` do laboratório (campo 7 = caminho, campo 9 = status), então os `awk` do Módulo 04 funcionam sem mudança. Se rodar duas vezes, a contagem acumula.
+
+### Lab 6 — Backup do PostgreSQL com rotação e teste de restauração
+Cenário: backup que ninguém testou é uma aposta. Escreva um script que gera, valida e rotaciona, e depois teste a restauração.
+```bash
+cat > ~/lab/scripts/backup-pg.sh <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+DEST="$HOME/lab/backups"; mkdir -p "$DEST"
+ARQ="$DEST/catalogo-$(date +%F-%H%M%S).sql.gz"
+sudo -u postgres pg_dump catalogo | gzip > "$ARQ"
+gzip -t "$ARQ"                                                    # arquivo íntegro?
+find "$DEST" -name 'catalogo-*.sql.gz' -mtime +7 -delete         # mantém 7 dias
+echo "backup ok: $ARQ"
+EOF
+chmod +x ~/lab/scripts/backup-pg.sh && ~/lab/scripts/backup-pg.sh
+sudo -u postgres createdb teste_restore
+zcat "$(ls -t ~/lab/backups/*.sql.gz | head -1)" | sudo -u postgres psql -q teste_restore
+sudo -u postgres psql -d teste_restore -tc "SELECT count(*) FROM produtos;"      # 2
+sudo -u postgres dropdb teste_restore
+```
+Para agendar, use o `cron` ou um *timer* do systemd (Módulo 11).
+
+### Lab 7 — Painel de saúde da stack
+Cenário: antes de dizer "está tudo no ar", confira serviços **e** portas, porque um serviço `active` pode não estar escutando.
+```bash
+for s in nginx postgresql dnsmasq; do printf '%-12s %s\n' "$s" "$(systemctl is-active $s)"; done
+for p in 80 443 5432 53; do ss -tln | grep -q ":$p " && echo "porta $p: escutando" || echo "porta $p: FECHADA"; done
+```
+Resposta esperada: `active` para os instalados e `escutando` para as portas ativas. Um serviço que você não instalou aparece como `inactive`, e `FECHADA` para a porta dele é o resultado correto.
+
 ### Desafios
 
 - **Desafio 1:** a stack completa "site + API + banco" funcionando e **sobrevivendo a `kill -9` da API** (graças ao `Restart=`) e a um `reboot` da distro (`enable`).
 - **Desafio 2:** configure o Nginx com `upstream` de **duas** instâncias da API e prove o balanceamento olhando os logs de acesso.
 - **Desafio 3:** escreva um script que verifica a validade dos certificados (`openssl x509 -enddate`) e avisa se faltar menos de 30 dias.
+- **Desafio 4:** no banco `catalogo`, crie o usuário `leitor`, que só consegue **ler** a tabela `produtos` (nada de `INSERT`, `UPDATE` ou `DELETE`), e conecte-se como ele por TCP. Pense em `GRANT` e em quais privilégios o usuário precisa (conectar no banco, ver o schema, ler a tabela). **Verifique:** `PGPASSWORD='senha-do-leitor' psql -h localhost -U leitor -d catalogo -c "SELECT count(*) FROM produtos;"` imprime a contagem (`2`), e o mesmo comando com `-c "INSERT INTO produtos (nome) VALUES ('x');"` imprime `ERROR:  permission denied for table produtos`.
 
 ## Erros comuns nesta fase
 
@@ -246,6 +298,50 @@ Exporte um diretório por NFS (ou Samba) e monte-o noutro ponto, gravando um arq
 - Backup nunca testado.
 - Chave privada com permissão aberta ou versionada.
 - Esquecer o `enable` e perder o serviço no reboot.
+- Subir a "API" com `&` ou `nohup` e achar que é um serviço: sem systemd não há `Restart=`, nem log no journal, nem início no boot.
+- Testar o Nginx só por `127.0.0.1` e esquecer que o site de verdade é escolhido pelo cabeçalho `Host` (e, em HTTPS, pelo SNI).
+- Ler `502 Bad Gateway` como defeito do Nginx, quando quase sempre é o *upstream* fora do ar ou na porta errada.
+
+## Ponte com módulos anteriores
+
+| Vem de | Como reaparece aqui |
+|---|---|
+| Módulo 04 — `awk`, `sort`, `uniq` | Ler o `access.log` do Nginx e contar status |
+| Módulo 05 — permissões e donos | Chave TLS `600`, diretório do NFS, usuário `User=` do serviço |
+| Módulo 06 — systemd | Unidades, `enable --now`, `Restart=`, `reset-failed` |
+| Módulo 07 — `apt` | O passo 1 do roteiro de 5 passos para todo serviço |
+| Módulo 09 — `ss`, `curl`, `dig`, `/etc/hosts` | Testar porta, nome e resposta de cada serviço |
+| Módulo 10 — firewall | O passo 4: liberar só a porta necessária (e em nuvem, o NSG/Security Group) |
+| Módulo 12 — `journalctl` e logs | Primeiro lugar para olhar quando o serviço não sobe |
+
+### Lab 8 — A API como serviço do systemd atrás do Nginx (integrador)
+Cenário: no Módulo 17 você subiu a "API" com `&`, que morre ao fechar o terminal. Transforme-a em serviço de verdade e prove que sobrevive a `kill -9`. Reaproveita o `api.lab` e a pasta `~/lab/api` (recrie `health.json` se faltar).
+```bash
+pkill -f "http.server 5000" || true                      # libera a porta
+mkdir -p ~/lab/api && echo '{"status":"ok"}' > ~/lab/api/health.json
+sudo tee /etc/systemd/system/api-lab.service >/dev/null <<EOF
+[Unit]
+Description=API de laboratorio (python http.server)
+After=network.target
+[Service]
+User=$USER
+WorkingDirectory=$HOME/lab/api
+ExecStart=/usr/bin/python3 -m http.server 5000 --bind 127.0.0.1
+Restart=on-failure
+RestartSec=1
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload && sudo systemctl enable --now api-lab
+curl -s http://api.lab/health.json                                      # {"status":"ok"} via Nginx
+sudo kill -9 "$(systemctl show -p MainPID --value api-lab)"; sleep 2
+curl -s http://api.lab/health.json                                      # voltou sozinha
+systemctl show api-lab -p NRestarts                                     # NRestarts=1
+journalctl -u api-lab --no-pager | grep -E "killed|Scheduled restart" | tail -2
+sudo ufw status                                                         # passo 4 do roteiro: firewall
+```
+Aqui se encontram `apt`/`systemctl` (06/07), `ss`/`curl`/`/etc/hosts` (09), firewall (10), `journalctl` (12) e o Nginx deste módulo: os cinco passos do roteiro, completos.
+> `[WSL]` No WSL o `ufw` costuma estar `inactive` (o firewall real é o do Windows); a ideia do passo é decidir conscientemente, e não pular.
 
 ## Conexão com os módulos seguintes
 

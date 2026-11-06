@@ -50,6 +50,10 @@ apt list --upgradable                 # o que pode atualizar
 
 > `[ATENÇÃO]` `apt update` **não atualiza programas**: só atualiza o *catálogo*. É `apt upgrade` que instala as versões novas. Confusão clássica. E `remove` mantém arquivos de configuração em `/etc`; para reinstalar "limpo", use `purge`.
 
+> `[TENTE VOCÊ]` Ensaie uma instalação sem instalar nada. Rode `apt-get -s install tree | grep -E '^(Inst|Conf)'`. Resposta: aparecem linhas como `Inst tree (2.1.1-2ubuntu3 Ubuntu:24.04/noble [amd64])` e `Conf tree ...`. Raciocínio: `-s` (simulate) executa o resolvedor de dependências e mostra o plano — `Inst` é "vou desempacotar", `Conf` é "vou configurar" — sem tocar no disco e sem exigir `sudo`. É o jeito de saber o impacto de um `install` antes de apertar Enter em produção.
+
+> `[ATENÇÃO]` Rode `apt update` sem `sudo`. Você verá `Could not open lock file /var/lib/apt/lists/lock ... Permission denied`. Não é bug do apt: o catálogo é do root. Em scripts, prefira `apt-get` (interface estável) a `apt` (feita para humanos e com saída que pode mudar).
+
 ### dpkg: a camada baixa
 
 ```bash
@@ -60,6 +64,8 @@ dpkg -s nginx                         # status
 sudo dpkg -i pacote.deb               # instala um .deb local (não resolve dependências)
 sudo apt -f install                   # conserta dependências quebradas depois do dpkg -i
 ```
+
+> `[TENTE VOCÊ]` Descubra a quem pertence um comando e de que ele depende. Rode `dpkg -S /usr/bin/ss` e `apt-cache depends iproute2 | head -5`. Resposta: o primeiro imprime `iproute2: /usr/bin/ss`; o segundo lista `Depends:` do pacote (libs como `libc6`, `libbpf1`). Raciocínio: `dpkg -S` vai do arquivo para o pacote; `apt-cache depends` vai do pacote para o que ele puxa. Juntos, respondem "de onde veio isso?" e "o que quebra se eu remover?".
 
 ## dnf/rpm: a mesma ideia em outra família
 
@@ -106,6 +112,8 @@ sudo apt update
 ```
 
 > `[ATENÇÃO]` Só adicione repositórios e chaves de fontes em que **confia**: um repositório de terceiros pode substituir qualquer pacote do sistema. Prefira `signed-by=` com a chave **restrita ao repositório**, em vez de confiar a chave globalmente (o antigo `apt-key` está obsoleto). Em RHEL-like: arquivos `.repo` em `/etc/yum.repos.d/`.
+
+> `[TENTE VOCÊ]` Separe o que você instalou do que veio de carona. Rode `apt-mark showmanual | wc -l` e `apt-mark showauto | wc -l`. Resposta: dois números; o de `auto` costuma ser bem maior. Raciocínio: `manual` são os pacotes que você (ou o instalador) pediu; `auto` são dependências. O `apt autoremove` só remove `auto` que ninguém mais precisa — por isso instalar com `apt install` e depois "marcar manual" (`apt-mark manual X`) salva um pacote de ser varrido.
 
 ## Segurar e fixar versões
 
@@ -159,11 +167,65 @@ Compile o `hello` do GNU como mostrado e rode-o. Depois apague `~/.local/bin/hel
 ### Lab 4 — Segunda família
 Em `docker run -it rockylinux:9`: `dnf install -y tree`, `rpm -qi tree`, `dnf provides /usr/bin/tree`.
 
+### Lab 5 — Detectando um binário adulterado
+Cenário: um auditor pergunta se os pacotes do servidor ainda têm os arquivos originais. O `dpkg` guarda o MD5 de cada arquivo instalado.
+1. `sudo apt install -y tree` e `dpkg -V tree` (sem saída = tudo íntegro).
+2. Adultere de leve: `sudo cp /usr/bin/tree /tmp/tree.bak && echo x | sudo tee -a /usr/bin/tree >/dev/null`.
+3. `dpkg -V tree` agora imprime algo como `??5??????  /usr/bin/tree` (o `5` sinaliza MD5 diferente).
+4. Restaure sem apagar nada à mão: `sudo apt install --reinstall -y tree` e confirme que `dpkg -V tree` voltou a ficar mudo.
+
+### Lab 6 — Construindo seu primeiro .deb
+Cenário: sua equipe distribui um script interno e quer instalá-lo, listá-lo e removê-lo como qualquer pacote.
+```bash
+mkdir -p ~/lab/pkg/ola-lab/DEBIAN ~/lab/pkg/ola-lab/usr/local/bin
+cat > ~/lab/pkg/ola-lab/usr/local/bin/ola-lab <<'EOF'
+#!/usr/bin/env bash
+echo "Olá do pacote ola-lab 1.0"
+EOF
+chmod 755 ~/lab/pkg/ola-lab/usr/local/bin/ola-lab
+cat > ~/lab/pkg/ola-lab/DEBIAN/control <<'EOF'
+Package: ola-lab
+Version: 1.0
+Architecture: all
+Maintainer: Aluno <aluno@exemplo.com>
+Description: Pacote de treino da trilha
+EOF
+dpkg-deb --root-owner-group --build ~/lab/pkg/ola-lab ~/lab/pkg/ola-lab_1.0_all.deb
+sudo dpkg -i ~/lab/pkg/ola-lab_1.0_all.deb
+ola-lab
+dpkg -L ola-lab
+dpkg -S /usr/local/bin/ola-lab
+sudo apt remove -y ola-lab
+```
+Esperado: o comando imprime a mensagem, `dpkg -L` mostra o caminho do script e `dpkg -S` responde `ola-lab: /usr/local/bin/ola-lab`. Depois do `remove`, `which ola-lab` não retorna nada.
+
+### Lab 7 — Instalação idempotente (a base do Ansible)
+Cenário: você precisa de um comando que garanta pacotes sem reinstalar o que já existe, e que rode igual 10 vezes seguidas.
+```bash
+cat > ~/lab/garante-pacotes.sh <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+for p in "$@"; do
+  if dpkg -s "$p" >/dev/null 2>&1; then
+    echo "ok       $p"
+  else
+    echo "instalando $p"
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$p" >/dev/null
+  fi
+done
+EOF
+chmod +x ~/lab/garante-pacotes.sh
+~/lab/garante-pacotes.sh curl tree jq
+~/lab/garante-pacotes.sh curl tree jq
+```
+Na segunda execução todas as linhas devem começar com `ok`. Essa propriedade — rodar de novo sem efeito colateral — chama-se **idempotência** e é o que o Ansible (Módulo 21) e o Dockerfile (Módulo 20) automatizam.
+
 ### Desafios
 
 - **Desafio 1:** descubra de qual pacote vem `/usr/bin/ss` em **Debian** e em **RHEL**, e mostre a diferença de nome.
 - **Desafio 2:** instale uma versão específica de um pacote, trave-a com `hold` e prove que `apt upgrade` não a altera.
 - **Desafio 3:** adicione um repositório de terceiros (por exemplo, do Docker, seguindo a documentação oficial) usando chave em `/etc/apt/keyrings` com `signed-by`.
+- **Desafio 4:** gere um arquivo `~/lab/pacotes-manuais.txt` com os pacotes marcados como manuais e prove que reinstalá-los seria um "não faz nada". **Verifique:** `apt-mark showmanual > ~/lab/pacotes-manuais.txt; xargs -a ~/lab/pacotes-manuais.txt apt-get -s --no-upgrade install | grep -c '^Inst'` deve imprimir `0`.
 
 ## Erros comuns nesta fase
 
@@ -173,6 +235,35 @@ Em `docker run -it rockylinux:9`: `dnf install -y tree`, `rpm -qi tree`, `dnf pr
 - Adicionar chaves GPG globais sem critério.
 - Baixar `.deb` aleatório da internet.
 - Compilar como root fora de `/usr/local` e "sujar" o sistema.
+- Usar `apt` (e não `apt-get`) dentro de scripts: a saída do `apt` não é estável e ele avisa sobre isso; além disso, esquecer `-y` ou `DEBIAN_FRONTEND=noninteractive` trava automações esperando resposta.
+- Rodar `apt install` depois de muito tempo sem `apt update` e tomar `404 Not Found`: o catálogo local aponta para versões que já saíram do repositório.
+
+## Ponte com módulos anteriores
+
+| Vem de | Como reaparece aqui |
+|---|---|
+| Módulo 03 (`find`, `stat`, caminhos) | `dpkg -L`/`dpkg -S` ligam arquivo e pacote; `/usr/local` e `~/.local` como destinos de `--prefix` |
+| Módulo 04 (`grep`, `awk`, `sort`, `uniq`) | Analisar `/var/log/dpkg.log` e a saída de `dpkg-query` |
+| Módulo 05 (`sudo`, dono e modo) | Só root altera o catálogo; chaves em `/etc/apt/keyrings` devem ser `0644` e do root |
+| Módulo 06 (processos e serviços) | Pacote de servidor instala uma unit; `apt` trava com o lock de outro processo |
+
+### Lab integrador — Auditoria de pacotes do servidor
+Cenário: antes de uma auditoria você precisa responder: o que foi instalado e quando, quais são os maiores pacotes, e quem é dono das chaves de confiança.
+1. (Módulo 04) Instalações por dia, a partir do log do dpkg:
+```bash
+awk '$3=="install"{print $1}' /var/log/dpkg.log | sort | uniq -c
+```
+Esperado: uma linha por dia com a quantidade de pacotes novos (ex.: `  3 2026-01-10`).
+2. (Módulos 04 e 07) Os 5 maiores pacotes, em MB:
+```bash
+dpkg-query -Wf '${Installed-Size}\t${Package}\n' | sort -rn | head -5 | awk '{printf "%.1f MB  %s\n", $1/1024, $2}'
+```
+3. (Módulo 05) Dono e modo da chave de confiança do Ubuntu, e dos diretórios de chaves:
+```bash
+stat -c '%a %U:%G %n' /usr/share/keyrings/ubuntu-archive-keyring.gpg /etc/apt/keyrings
+```
+Esperado: `644 root:root` para a chave e `755 root:root` para o diretório. Se uma chave tivesse permissão de escrita para outros, qualquer usuário poderia trocar a "assinatura" em que o apt confia.
+4. (Módulos 03 e 06) Quais pacotes instalados trouxeram uma unit do systemd? `dpkg -S /usr/lib/systemd/system/*.service 2>/dev/null | cut -d: -f1 | sort -u | head`. Compare com `systemctl list-unit-files --type=service | wc -l`.
 
 ## Conexão com os módulos seguintes
 

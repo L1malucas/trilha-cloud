@@ -74,6 +74,10 @@ read -rsp "Senha: " SENHA; echo      # -s não exibe o que é digitado
 
 > `[ATENÇÃO]` **Sempre coloque variáveis entre aspas**: `"$ARQUIVO"`. Sem aspas, um valor com espaço (`meu arquivo.txt`) vira dois argumentos e o script faz a coisa errada, às vezes com `rm`.
 
+> `[TENTE VOCÊ]` Veja o estrago das aspas ausentes. Rode `cd ~/lab && touch "meu arquivo.txt"; f="meu arquivo.txt"; ls $f; ls "$f"; rm "$f"`. Resposta: o primeiro `ls` reclama `cannot access 'meu': No such file or directory` e `'arquivo.txt'`; o segundo imprime `meu arquivo.txt`. Raciocínio: sem aspas, o shell separa o valor nos espaços e entrega **dois** argumentos ao `ls`. Troque o `ls` por `rm` e você apaga outro arquivo chamado `meu` ou `arquivo.txt` sem querer — por isso aspas sempre.
+
+> `[TENTE VOCÊ]` O código de saída é a "resposta" de todo comando. Rode `grep -q root /etc/passwd; echo $?` e `grep -q naoexiste /etc/passwd; echo $?`. Resposta: `0` e `1`. Raciocínio: no shell, `0` significa **sucesso** e qualquer outro número, falha (o contrário das linguagens de programação). O `if` do bash não testa "verdadeiro/falso", ele testa "o comando terminou com 0?" — por isso `if grep -q root /etc/passwd; then ...` funciona sem `[[ ]]`.
+
 ## Condicionais
 
 ```bash
@@ -131,6 +135,8 @@ done < <(tail -n +2 ~/lab/dados/usuarios.csv)           # tail pula o cabeçalho
 
 > `[TENTE VOCÊ]` Escreva um laço que imprima o tamanho de cada arquivo de `~/lab/dados`. Resposta: `for f in ~/lab/dados/*; do du -h "$f"; done`.
 
+> `[ATENÇÃO]` Pegadinha clássica do pipe com `while`: `n=0; printf 'a\nb\n' | while read -r l; do n=$((n+1)); done; echo $n` imprime **`0`**, não `2`. Cada lado do pipe roda num subshell, e a variável alterada lá dentro morre com ele. A saída é usar redirecionamento no lugar do pipe: `while read -r l; do n=$((n+1)); done < <(printf 'a\nb\n')`, que imprime `2` (é o que o exemplo do CSV acima faz).
+
 ## Funções e arrays
 
 ```bash
@@ -170,6 +176,10 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"; echo "limpo"' EXIT
 echo "trabalhando em $TMP"
 ```
+
+> `[TENTE VOCÊ]` Compare como o script reage a erros. Rode `bash -c 'false | true; echo "sem pipefail: $?"'` e `bash -c 'set -o pipefail; false | true; echo "com pipefail: $?"'`. Resposta: `sem pipefail: 0` e `com pipefail: 1`. Raciocínio: sem `pipefail`, o pipe devolve só o status do **último** comando — um `grep` que falhou no meio seria ignorado e o script seguiria como se nada tivesse acontecido.
+
+> `[TENTE VOCÊ]` O `trap EXIT` roda mesmo quando o script falha. Rode `bash -c 'trap "echo limpando" EXIT; echo trabalhando; exit 3'; echo "saiu com $?"`. Resposta: `trabalhando`, `limpando` e `saiu com 3`. Raciocínio: a limpeza acontece **antes** de o processo terminar e o código de saída original é preservado.
 
 Parâmetros com opções (`getopts`):
 
@@ -233,6 +243,8 @@ Formato: `minuto hora dia-do-mês mês dia-da-semana comando`
 
 > `[ATENÇÃO]` O `cron` roda com um **ambiente mínimo** (PATH enxuto, sem seu `.bashrc`). Use **caminhos absolutos**, defina `PATH` no topo do crontab e redirecione a saída (`>> /tmp/job.log 2>&1`); senão, falhas somem sem rastro. (O serviço `cron` precisa estar ativo: `sudo systemctl enable --now cron`.)
 
+> `[ATENÇÃO]` Dentro do crontab o caractere `%` tem significado especial (vira quebra de linha). Um job como `0 2 * * * tar -czf /tmp/b-$(date +%F).tgz ...` **falha em silêncio**; escreva `date +\%F`. A forma mais segura é mover a lógica para um script e deixar o crontab só com o caminho absoluto dele.
+
 Ferramenta online para validar a expressão: https://crontab.guru/
 
 ### at: uma execução única
@@ -291,11 +303,66 @@ journalctl -u bkp.service
 1. Agende `monitor-disco.sh` a cada minuto no cron, escrevendo em `/tmp/monitor.log`; acompanhe com `tail -f`.
 2. Crie um timer systemd equivalente e compare os logs (`journalctl`).
 
+### Lab 4 — Health check com códigos de saída
+Cenário: um monitor chama seu script a cada minuto; ele precisa dizer, só pelo código de saída, se o site está saudável (`0`), lento (`1`) ou fora (`2`).
+```bash
+cat > ~/lab/scripts/health.sh <<'EOF'
+#!/usr/bin/env bash
+set -uo pipefail
+URL=${1:?uso: $0 <url> [limite_segundos]}
+LIMITE=${2:-1}
+saida=$(curl -s -o /dev/null -m 5 -w '%{http_code} %{time_total}' "$URL") || { echo "FORA: sem resposta"; exit 2; }
+codigo=${saida% *}; tempo=${saida#* }
+if [[ "$codigo" != 200 ]]; then echo "FORA: HTTP $codigo"; exit 2; fi
+if awk -v t="$tempo" -v l="$LIMITE" 'BEGIN{exit !(t>l)}'; then echo "LENTO: ${tempo}s"; exit 1; fi
+echo "OK: HTTP $codigo em ${tempo}s"
+EOF
+chmod +x ~/lab/scripts/health.sh
+python3 -m http.server 8080 --directory ~/lab >/dev/null 2>&1 &
+sleep 1
+~/lab/scripts/health.sh http://localhost:8080/gera-lab.sh; echo "exit=$?"
+~/lab/scripts/health.sh http://localhost:8080/nada; echo "exit=$?"
+~/lab/scripts/health.sh http://localhost:8080/gera-lab.sh 0.0000001; echo "exit=$?"
+kill $!
+~/lab/scripts/health.sh http://localhost:8080/; echo "exit=$?"
+```
+Esperado: `OK ... exit=0`, `FORA: HTTP 404 exit=2`, `LENTO ... exit=1` e, com o servidor desligado, `FORA: sem resposta exit=2`. Esse padrão (0/1/2) é o que ferramentas de monitoramento (Nagios, Zabbix, Kubernetes probes) esperam.
+
+### Lab 5 — Rotação de logs
+Cenário: o disco enche porque ninguém comprime os logs antigos. Você cria o script de retenção e o testa com arquivos "envelhecidos".
+```bash
+mkdir -p ~/lab/logs-teste && cd ~/lab/logs-teste
+for d in 1 5 10 20 40; do echo "log de $d dias" > "app-$d.log"; touch -d "$d days ago" "app-$d.log"; done
+cat > ~/lab/scripts/rotaciona.sh <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+DIR=${1:?uso: $0 <diretorio> [dias_compactar] [dias_apagar]}
+COMPACTA=${2:-7}; APAGA=${3:-30}
+find "$DIR" -name '*.log' -mtime +"$COMPACTA" -print -exec gzip -f {} \;
+find "$DIR" -name '*.log.gz' -mtime +"$APAGA" -print -delete
+EOF
+chmod +x ~/lab/scripts/rotaciona.sh
+~/lab/scripts/rotaciona.sh ~/lab/logs-teste
+ls ~/lab/logs-teste
+```
+Esperado: `app-10.log`, `app-20.log` e `app-40.log` são compactados e `app-40.log.gz` é apagado em seguida (mais de 30 dias). Sobram `app-1.log`, `app-5.log`, `app-10.log.gz` e `app-20.log.gz`. Rodar de novo não muda nada (idempotente).
+
+### Lab 6 — Impedindo duas execuções ao mesmo tempo
+Cenário: o backup das 02:00 ainda roda quando o das 02:05 começa e os dois brigam pelo mesmo arquivo. `flock` resolve com um arquivo-trava.
+```bash
+( flock -n 9 || { echo "já em execução"; exit 1; }; echo "A: começou"; sleep 6; echo "A: terminou" ) 9>~/lab/job.lock &
+sleep 1
+( flock -n 9 || { echo "B: já em execução, saindo"; exit 1; }; echo "B: começou" ) 9>~/lab/job.lock
+wait
+```
+Esperado: A começa, B imprime `B: já em execução, saindo` e só A termina. Rode B de novo depois de A acabar: agora ele executa. Em scripts reais, use `exec 9>/var/lock/meujob.lock; flock -n 9 || exit 1` no topo.
+
 ### Desafios
 
 - **Desafio 1:** CLI `lab-toolbox.sh` com subcomandos (`backup`, `limpar`, `report`) e `--help`, usando `case`, `getopts` e funções.
 - **Desafio 2:** `bkp.sh` que valida a origem, evita sobrescrever, mantém só os N backups mais recentes e registra tudo em log.
 - **Desafio 3:** rode `shellcheck` em todos os seus scripts e corrija **todas** as advertências.
+- **Desafio 4:** faça o `bkp.sh` ser seguro contra execução dupla: usar `flock`, e não duplicar o backup do mesmo dia (nome sem hora, falha limpa se já existir). **Verifique:** depois de rodar o script duas vezes seguidas, `ls ~/backups/bkp-dados-$(date +%Y%m%d)* | wc -l` imprime `1`.
 
 ## Erros comuns nesta fase
 
@@ -306,6 +373,79 @@ journalctl -u bkp.service
 - Esquecer `chmod +x` ou o shebang.
 - Script que só funciona na primeira execução (não idempotente).
 - `rm -rf "$DIR/"*` com `$DIR` vazio (use `${DIR:?}`).
+- Usar `%` direto no crontab (`date +%F`) sem escapar com `\%`: o job falha sem mensagem.
+- Alterar variáveis dentro de `comando | while read ...` e estranhar que elas "voltam" ao valor antigo: o pipe cria um subshell.
+- Agendar um job longo sem trava (`flock`): duas execuções simultâneas corrompem o mesmo arquivo.
+
+## Ponte com módulos anteriores
+
+| Vem de | Como reaparece aqui |
+|---|---|
+| Módulo 02 (pipes, redirecionamento, aspas, `$?`) | Todo script é uma sequência de pipes; `2>&1`, `$(...)`, aspas em variáveis |
+| Módulo 03 (`find`, `tar`, caminhos) | Retenção com `find -mtime`, backup com `tar`, `mktemp` |
+| Módulo 04 (`grep`, `awk`, `sort`, `uniq`) | Cálculo de métricas sobre o `access.log` dentro do script |
+| Módulo 05 (`chmod +x`, `sudo`, `User=`) | Script executável; serviço rodando sem root |
+| Módulo 06 (systemd, `journalctl`) | `.service` + `.timer`, logs no journal, `trap` e sinais |
+| Módulo 09 (`curl`, `ss`) | Health checks dentro do script |
+
+### Lab integrador — Relatório de saúde agendado por timer
+Cenário: você precisa de um relatório de saúde a cada minuto (disco, volume de erros 5xx do `access.log` e se o site responde), com alerta por código de saída e histórico no journal.
+1. (Módulos 02 a 04 e 11) O script:
+```bash
+cat > ~/lab/scripts/saude.sh <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+LOG=${1:-$HOME/lab/dados/access.log}
+LIMITE_DISCO=${2:-80}
+
+uso=$(df / --output=pcent | tail -1 | tr -dc '0-9')
+total=$(wc -l < "$LOG")
+erros=$(awk '$9 ~ /^5/' "$LOG" | wc -l)
+pct=$(awk -v e="$erros" -v t="$total" 'BEGIN{printf "%.1f", e*100/t}')
+echo "disco=${uso}% linhas=${total} erros5xx=${erros} (${pct}%)"
+
+if (( uso > LIMITE_DISCO )); then
+  echo "ALERTA: disco acima de ${LIMITE_DISCO}%"
+  exit 2
+fi
+EOF
+chmod +x ~/lab/scripts/saude.sh
+~/lab/scripts/saude.sh; echo "exit=$?"
+~/lab/scripts/saude.sh "$HOME/lab/dados/access.log" 1; echo "exit=$?"
+```
+Esperado: a primeira chamada imprime uma linha como `disco=7% linhas=5000 erros5xx=NNN (4.x%)` e `exit=0`; a segunda (limite de 1%) imprime o `ALERTA` e `exit=2`. Se o `access.log` não existir, rode `~/lab/gera-lab.sh`.
+2. (Módulos 05 e 06) A service e o timer:
+```bash
+sudo tee /etc/systemd/system/saude.service >/dev/null <<EOF
+[Unit]
+Description=Relatorio de saude do laboratorio
+
+[Service]
+Type=oneshot
+ExecStart=$HOME/lab/scripts/saude.sh
+User=$USER
+EOF
+sudo tee /etc/systemd/system/saude.timer >/dev/null <<'EOF'
+[Unit]
+Description=Roda o relatorio de saude a cada minuto
+
+[Timer]
+OnActiveSec=5
+OnUnitActiveSec=1min
+
+[Install]
+WantedBy=timers.target
+EOF
+sudo systemctl daemon-reload && sudo systemctl enable --now saude.timer
+```
+3. (Módulo 06) Espere uns 2 minutos e confirme o ciclo:
+```bash
+systemctl list-timers saude.timer --no-pager
+journalctl -u saude.service -o cat --no-pager | tail -4
+journalctl -u saude.service -o cat --no-pager | grep -c '^disco='
+```
+Esperado: o timer mostra a próxima execução; o journal tem linhas `disco=...` repetidas e o contador é maior ou igual a `2`. Você acabou de montar o que um agente de monitoramento faz.
+4. Limpeza: `sudo systemctl disable --now saude.timer; sudo rm /etc/systemd/system/saude.{service,timer}; sudo systemctl daemon-reload`.
 
 ## Conexão com os módulos seguintes
 

@@ -80,6 +80,8 @@ Boas mensagens de commit explicam **o porquê** em uma linha curta e no imperati
 
 > `[ATENÇÃO]` Nunca faça commit de **segredos** (senhas, chaves, tokens, `.env`). Mesmo que apague depois, ficam no histórico. Use `.gitignore` desde o início e, se vazar, **troque a credencial**: remover do Git não basta.
 
+> `[TENTE VOCÊ]` Como saber, sem adivinhar, em qual das três áreas está cada mudança? Raciocínio: o `git status -s` mostra duas colunas de letras, a da esquerda é o *stage* e a da direita é o diretório de trabalho. Rode `echo "x" >> README.md; git status -s`, depois `git add README.md; git status -s`. Resposta: primeiro ` M README.md` (espaço, depois M: modificado só no diretório de trabalho); depois `M  README.md` (M na primeira coluna: já está no *stage*). Se aparecer `MM`, você editou de novo depois do `add`. Termine com `git restore --staged README.md && git restore README.md` para voltar ao estado limpo.
+
 ### .gitignore
 
 ```bash
@@ -95,6 +97,8 @@ EOF
 git add .gitignore && git commit -m "Adiciona .gitignore"
 ```
 
+> `[ATENÇÃO]` O `.gitignore` só vale para arquivos que **ainda não são rastreados**. Se você já fez commit de um `.env`, adicioná-lo ao `.gitignore` depois não o tira do repositório: use `git rm --cached .env` (remove do índice, mantém no disco) e faça um novo commit. E lembre: o conteúdo antigo continua no histórico, então segredo vazado exige trocar a credencial. Para descobrir *por que* um arquivo está sendo ignorado, `git check-ignore -v caminho` aponta a regra e a linha.
+
 ## Desfazendo erros
 
 | Situação | Comando |
@@ -106,6 +110,8 @@ git add .gitignore && git commit -m "Adiciona .gitignore"
 | Ver tudo que aconteceu (rede de segurança) | `git reflog` |
 
 > `[ATENÇÃO]` `git reset --hard` e `git clean -fd` **descartam trabalho sem volta**. E `git push --force` reescreve o histórico dos outros: evite em branches compartilhadas. Em dúvida, `git status` e `git reflog` primeiro.
+
+> `[TENTE VOCÊ]` Dá para recuperar um commit depois de um `reset --hard`? Raciocínio: o `reset` só move o ponteiro da branch; o commit continua no banco de objetos, e o `reflog` guarda o histórico dos movimentos do `HEAD`. Faça, num repositório de teste, `echo a > a.txt && git add a.txt && git commit -m "quase perdi"`, depois `git reset --hard HEAD~1`, `git reflog | head -3` e `git reset --hard HEAD@{1}`. Resposta: o `reflog` lista `quase perdi` na segunda linha, e o último comando traz o commit de volta (`git log --oneline -1` mostra `quase perdi`). Isso funciona enquanto o Git não limpa objetos soltos (semanas, por padrão).
 
 ## Branches e merge
 
@@ -131,6 +137,8 @@ versão da branch
 ```
 
 Resolva editando o arquivo (escolhendo/combinando), depois `git add arquivo` e `git commit`. Treine de propósito (Lab 3).
+
+> `[TENTE VOCÊ]` O que o Git diz quando a `main` não andou e você faz merge? Raciocínio: se ninguém mexeu na `main` desde que a branch nasceu, não há o que "juntar": basta mover o ponteiro da `main` para a frente. Rode `git switch -c teste && echo t > t.txt && git add t.txt && git commit -m "t" && git switch main && git merge teste`. Resposta: a saída traz `Fast-forward` e **nenhum commit de merge** novo. Repita com `git merge --no-ff` numa outra branch e compare `git log --oneline --graph`: agora aparece o commit de merge.
 
 ## Remotos: GitHub
 
@@ -168,6 +176,8 @@ id deploy &>/dev/null || sudo useradd -m deploy
 
 **Idempotência** é a propriedade-chave: executar uma vez ou dez vezes dá o mesmo resultado. Ferramentas como Ansible e Terraform são construídas sobre ela. Escreva seus scripts do Módulo 11 assim, e versione-os.
 
+> `[TENTE VOCÊ]` O que "idempotente" muda na prática? Raciocínio: rode o mesmo comando duas vezes e olhe o código de saída com `echo $?`. Teste `mkdir /tmp/idem; mkdir /tmp/idem; echo $?` e depois `mkdir -p /tmp/idem2; mkdir -p /tmp/idem2; echo $?`. Resposta: o primeiro imprime `mkdir: cannot create directory ‘/tmp/idem’: File exists` e `1` (a segunda execução quebra); o segundo imprime `0` (pode repetir à vontade). É essa diferença que separa um script de "instalação" de um script de "estado desejado".
+
 ## Laboratórios
 
 ### Lab 1 — Seu primeiro repositório
@@ -182,11 +192,57 @@ Crie uma branch, altere **a mesma linha** na `main` e na branch, faça merge, **
 ### Lab 4 — GitHub
 Crie um repositório vazio no GitHub, conecte por SSH, faça `push` e abra um Pull Request de uma branch para a `main` (pode ser você mesmo revisando).
 
+### Lab 5 — Ignorando dados e artefatos no repositório de estudo
+Cenário: no Módulo 00 você fez `git init` em `~/lab`. Os `access.log` de 5000 linhas e as imagens de disco **não** devem ir para o Git.
+```bash
+cd ~/lab
+printf 'dados/\nrootfs/\n*.img\n*.key\n' >> .gitignore
+git add .gitignore && git commit -m "Ignora dados gerados, rootfs, imagens e chaves"
+git status --short                                  # dados/ e *.img não aparecem mais
+git check-ignore -v dados/access.log                # qual regra bloqueou? (o número da linha varia)
+```
+Mensagem de commit boa explica o **porquê** ("Ignora dados gerados") e não só o quê.
+
+### Lab 6 — Interrupção: stash e cherry-pick
+Cenário: você está no meio de uma edição quando chega um hotfix urgente. Guarde o trabalho, aplique a correção na `main` e retome.
+```bash
+cd ~/lab/meu-projeto
+echo "meio de uma edicao" >> README.md
+git stash push -m "wip readme"                      # guarda e deixa a árvore limpa
+git status --short                                  # vazio
+git switch -c hotfix
+echo "correcao urgente" > hotfix.txt && git add hotfix.txt && git commit -m "Adiciona correção urgente"
+git switch main
+git cherry-pick hotfix                              # copia SÓ esse commit para a main
+git stash pop                                       # retoma a edição
+git log --oneline | head -2
+```
+`cherry-pick` copia um commit específico (cria outro hash); `merge` traz a branch inteira. Use cherry-pick para levar uma correção pontual a outra linha.
+
+### Lab 7 — Hook que barra segredos
+Cenário: o time já vazou uma senha no Git uma vez. Você escreve uma trava local, usando `grep` (Módulo 04) e shell (Módulo 11).
+```bash
+cd ~/lab/meu-projeto
+cat > .git/hooks/pre-commit <<'EOF'
+#!/usr/bin/env bash
+if git diff --cached | grep -qiE '^\+.*(password|senha|secret)\s*='; then
+  echo "BLOQUEADO: parece haver segredo neste commit." >&2
+  exit 1
+fi
+EOF
+chmod +x .git/hooks/pre-commit
+echo 'password=123' > teste.env
+git add teste.env && git commit -m "teste"          # deve ser barrado
+git restore --staged teste.env && rm teste.env
+```
+O hook mora em `.git/hooks`, que **não é versionado**: cada pessoa precisa instalá-lo (por isso times usam ferramentas como `pre-commit` ou CI para garantir a regra para todos).
+
 ### Desafios
 
 - **Desafio 1:** reescreva um script do Módulo 11 para ser **idempotente** e prove executando-o duas vezes seguidas.
 - **Desafio 2:** use `git bisect` para achar o commit que "quebrou" algo (crie o cenário: 10 commits, um deles com bug).
 - **Desafio 3:** explique, com suas palavras, `merge` x `rebase` (aprofundado no Módulo 19).
+- **Desafio 4:** apague com `git branch -D` uma branch que tenha um commit **não integrado** e recupere esse commit numa nova branch chamada `recuperada`, usando só o que o Git ainda lembra. **Verifique:** `git log --oneline -1 recuperada` deve mostrar o hash curto e a mensagem do commit que você tinha apagado, e `git branch --list recuperada` deve imprimir `  recuperada`.
 
 ## Erros comuns nesta fase
 
@@ -196,6 +252,40 @@ Crie um repositório vazio no GitHub, conecte por SSH, faça `push` e abra um Pu
 - `push --force` em branch compartilhada.
 - Commits gigantes misturando assuntos.
 - Achar que `git add .` é sempre seguro (confira o `git status` antes).
+- Adicionar um arquivo ao `.gitignore` depois de já tê-lo commitado e achar que ele "saiu" do repositório (falta `git rm --cached`).
+- Fazer `git reset --hard` ou `branch -D` sem olhar o `git reflog` antes: quase sempre dá para voltar, mas só enquanto você não entra em pânico e não roda `gc`.
+
+## Ponte com módulos anteriores
+
+| Vem de | Como reaparece aqui |
+|---|---|
+| Módulo 02 — shell e pipes | `git log --oneline` encadeado com `head` ou `grep`, aliases, `$?` para testar sucesso |
+| Módulo 03 — arquivos e diretórios | A pasta `.git` é um diretório comum; `.gitignore` usa os mesmos *globs* do shell |
+| Módulo 04 — `grep`, `awk`, `diff` | `git diff`, `git log --grep` e o hook de segredos usam o mesmo raciocínio |
+| Módulo 05 — permissões | Chave SSH com `600`; hook só roda com bit `x` |
+| Módulo 09 — SSH | Autenticação do remoto por chave `ed25519` |
+| Módulo 11 — shell script | Scripts idempotentes e hooks são shell script versionado |
+
+### Lab 8 — Mini-projeto `infra-lab` (integrador)
+Cenário: você entrega um script que processa os logs do laboratório, idempotente, versionado e sem commitar o que ele gera. Junta `awk`/`sort`/`uniq` (04), permissões (05), `set -euo pipefail` e `mkdir -p` (11) e o ciclo do Git (15).
+```bash
+mkdir -p ~/lab/infra-lab/scripts && cd ~/lab/infra-lab && git init -q
+cat > scripts/resumo-codigos.sh <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+SAIDA="$HOME/lab/infra-lab/saida"
+mkdir -p "$SAIDA"
+awk '{print $9}' "$HOME/lab/dados/access.log" | sort | uniq -c | sort -rn > "$SAIDA/codigos.txt"
+echo "resumo gerado: $(wc -l < "$SAIDA/codigos.txt") codigos"
+EOF
+chmod +x scripts/resumo-codigos.sh
+printf 'saida/\n' > .gitignore
+./scripts/resumo-codigos.sh && sha256sum saida/codigos.txt
+./scripts/resumo-codigos.sh && sha256sum saida/codigos.txt      # mesmo hash: idempotente
+git add . && git status --short                                 # saida/ não aparece
+git commit -m "Adiciona resumo de códigos HTTP do access.log" && git log --oneline
+```
+Resposta esperada: `resumo gerado: 5 codigos` (200, 301, 403, 404, 500) nas duas execuções, com o **mesmo** hash. Esse é o padrão de trabalho da trilha inteira: script pequeno, repetível, versionado, com a saída fora do repositório.
 
 ## Conexão com os módulos seguintes
 

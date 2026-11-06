@@ -48,6 +48,8 @@ Leia `eth0: inet 172.20.10.5/20`: o endereço é `172.20.10.5`, e `/20` é a **m
 
 > `[TEORIA]` IPv4 tem 32 bits (`192.168.1.10`); IPv6, 128 bits (`2001:db8::1`). Faixas **privadas** (não roteadas na internet): `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`. O NAT do roteador permite que elas saiam para a internet.
 
+> `[TENTE VOCÊ]` Calcule uma rede sem papel. Rode `python3 -c "import ipaddress as i; n=i.ip_network('172.20.10.5/20', strict=False); print(n, n.num_addresses, n.netmask)"`. Resposta: `172.20.0.0/20 4096 255.255.240.0`. Raciocínio: `/20` fixa os 20 primeiros bits; os 12 restantes variam (2^12 = 4096). Como 20 não é múltiplo de 8, o terceiro octeto é "cortado no meio" (240 = 11110000), e por isso o endereço `172.20.10.5` pertence à rede que começa em `172.20.0.0`. Repita com `/24` e `/28` e veja o número de endereços cair.
+
 Alterações temporárias (somem no reboot), úteis em laboratório:
 
 ```bash
@@ -55,6 +57,8 @@ sudo ip addr add 10.99.0.5/24 dev eth0
 sudo ip addr del 10.99.0.5/24 dev eth0
 sudo ip link set eth0 down && sudo ip link set eth0 up
 ```
+
+> `[TENTE VOCÊ]` Pergunte ao kernel o caminho de um pacote. Rode `ip r get 8.8.8.8` e depois `ip r get 127.0.0.1`. Resposta: o primeiro mostra algo como `8.8.8.8 via 172.20.0.1 dev eth0 src 172.20.10.5` (saiu pelo gateway); o segundo, `local 127.0.0.1 dev lo`. Raciocínio: `via` indica que o destino está fora da sua rede e o pacote vai para o gateway; `local` indica que o destino é a própria máquina. É o primeiro comando a rodar quando alguém diz "não chego nesse IP".
 
 Para **persistir** configuração: Ubuntu usa **Netplan** (`/etc/netplan/*.yaml`) ou **NetworkManager** (`nmcli`); RHEL usa NetworkManager (`nmcli`); Debian clássico usa `/etc/network/interfaces`. No WSL, a rede é gerida pelo Windows.
 
@@ -123,6 +127,10 @@ wget -q https://example.com -O pagina.html
 nc -zv example.com 443                            # a porta está aberta? (z varre, v verboso)
 ```
 
+> `[TENTE VOCÊ]` Meça um serviço como um SRE. Rode `python3 -m http.server 8080 --directory ~/lab >/dev/null 2>&1 & sleep 1; for p in gera-lab.sh nao-existe; do curl -s -o /dev/null -w "$p -> %{http_code}\n" http://localhost:8080/$p; done; kill $!`. Resposta: `gera-lab.sh -> 200` e `nao-existe -> 404`. Raciocínio: o `-o /dev/null` descarta o corpo e o `-w` imprime só o que interessa (código e, se quiser, `%{time_total}`). Isso vira, quase sem mudança, um health check de monitoramento (Módulos 11 e 12).
+
+> `[ATENÇÃO]` Dois erros parecidos, causas diferentes: `nc -zv localhost 9` responde `Connection refused` (a máquina respondeu "aqui não tem nada nessa porta" — serviço parado ou porta errada), enquanto uma porta bloqueada por firewall costuma só **demorar e dar timeout** (os pacotes são descartados em silêncio). Recusa rápida = alcançou o host; silêncio = algo no meio do caminho.
+
 ## SSH: acesso remoto seguro
 
 O **SSH** cria um canal criptografado para executar comandos em outra máquina. Autenticar por **chave** é mais seguro que por senha: você guarda a chave **privada** (nunca sai da sua máquina) e instala a **pública** no servidor.
@@ -148,6 +156,8 @@ Host web1
 Depois: `ssh web1`.
 
 > `[ATENÇÃO]` A chave **privada** (`id_ed25519`) nunca vai para Git, e-mail ou chat. As permissões importam: `chmod 700 ~/.ssh` e `chmod 600 ~/.ssh/id_ed25519`; o SSH recusa chaves abertas demais.
+
+> `[TENTE VOCÊ]` Veja o SSH recusar uma chave frouxa. Rode `ssh-keygen -q -t ed25519 -N "" -f ~/lab/k_teste && chmod 644 ~/lab/k_teste && ssh -i ~/lab/k_teste -o BatchMode=yes localhost true 2>&1 | head -3`. Resposta: `WARNING: UNPROTECTED PRIVATE KEY FILE!` e `Permissions 0644 for ... are too open`. Corrija com `chmod 600 ~/lab/k_teste` e a reclamação some. Raciocínio: o SSH confere o modo do arquivo **antes** de qualquer conexão, e qualquer permissão para grupo/outros invalida a chave (Módulo 05 em ação). Apague com `rm ~/lab/k_teste*`.
 
 ### Túneis SSH
 
@@ -224,11 +234,64 @@ Percorra os 5 degraus no seu WSL: `ip a`, `ip r`, `ping` do gateway, `ping 1.1.1
 ### Lab 4 — Duas "máquinas" com namespaces
 Monte os namespaces `azul` e `verde`, suba um `python3 -m http.server` em um deles e acesse com `curl` a partir do outro.
 
+### Lab 5 — Roteador entre duas redes
+Cenário: duas redes (10.1.0.0/24 e 10.2.0.0/24) só se falam através de um roteador. Você monta o equivalente de uma VNet com duas sub-redes, só com namespaces.
+```bash
+for n in rede-a rede-b rot; do sudo ip netns add $n; done
+sudo ip link add a-r type veth peer name r-a
+sudo ip link add b-r type veth peer name r-b
+sudo ip link set a-r netns rede-a; sudo ip link set r-a netns rot
+sudo ip link set b-r netns rede-b; sudo ip link set r-b netns rot
+
+sudo ip -n rede-a addr add 10.1.0.2/24 dev a-r
+sudo ip -n rot    addr add 10.1.0.1/24 dev r-a
+sudo ip -n rede-b addr add 10.2.0.2/24 dev b-r
+sudo ip -n rot    addr add 10.2.0.1/24 dev r-b
+for par in rede-a:a-r rot:r-a rede-b:b-r rot:r-b; do sudo ip -n ${par%%:*} link set ${par##*:} up; done
+for n in rede-a rede-b rot; do sudo ip -n $n link set lo up; done
+
+sudo ip -n rede-a route add default via 10.1.0.1
+sudo ip -n rede-b route add default via 10.2.0.1
+
+sudo ip netns exec rede-a ping -c 2 -W 1 10.2.0.2       # FALHA: o roteador ainda não encaminha
+sudo ip netns exec rot sysctl -w net.ipv4.ip_forward=1
+sudo ip netns exec rede-a ping -c 2 10.2.0.2            # agora funciona
+```
+Esperado: o primeiro `ping` termina com `100% packet loss`; o segundo, com `0% packet loss`. Moral: ter rota padrão nos dois lados não basta, o "roteador" precisa de `ip_forward=1` (é exatamente o que um gateway de nuvem faz por você). Para ver o caminho: `sudo ip netns exec rede-a ip r get 10.2.0.2`.
+
+### Lab 6 — "Funciona na minha máquina": serviço só em localhost
+Cenário: o time sobe a aplicação, o `curl` local funciona, mas o outro servidor não acessa. Use a topologia do Lab 5.
+1. Suba um servidor preso ao loopback em `rede-b`:
+```bash
+sudo ip netns exec rede-b python3 -m http.server 8081 --bind 127.0.0.1 --directory ~/lab >/dev/null 2>&1 &
+sleep 1
+sudo ip netns exec rede-b ss -tln | grep 8081           # note: 127.0.0.1:8081
+sudo ip netns exec rede-b curl -s -o /dev/null -w "local: %{http_code}\n" http://127.0.0.1:8081/
+sudo ip netns exec rede-a curl -sS -m 3 http://10.2.0.2:8081/ 2>&1 | head -1
+```
+Esperado: local `200`; de `rede-a`, `curl: (7) Failed to connect ... Connection refused`.
+2. Corrija: `sudo pkill -f "[h]ttp.server 8081"`, suba de novo com `--bind 0.0.0.0` e repita o `curl` a partir de `rede-a`: agora `200`. O `ss` mostra `0.0.0.0:8081` em vez de `127.0.0.1:8081`.
+3. Lição: o endereço depois do `ss` (`127.0.0.1` x `0.0.0.0`) diz **quem** pode conectar.
+
+### Lab 7 — Backup incremental com rsync
+Cenário: copiar `~/lab/dados` para um destino de backup, enviando apenas o que mudou, e prever estragos antes de executar.
+```bash
+mkdir -p ~/lab/backup
+rsync -avn ~/lab/dados/ ~/lab/backup/            # simulação: lista o que seria copiado
+rsync -av  ~/lab/dados/ ~/lab/backup/            # copia
+echo "nova linha" >> ~/lab/dados/app.log
+rsync -a --stats ~/lab/dados/ ~/lab/backup/ | grep 'regular files transferred'
+rm ~/lab/dados/usuarios.csv
+rsync -avn --delete ~/lab/dados/ ~/lab/backup/ | grep deleting
+```
+Esperado: a segunda cópia transfere **1** arquivo (`Number of regular files transferred: 1`) e a simulação com `--delete` mostra `deleting usuarios.csv`. Restaure o CSV com `~/lab/gera-lab.sh` (ele recria todos os dados). Não rode o `--delete` sem o `-n` antes.
+
 ### Desafios
 
 - **Desafio 1:** acesso a um "servidor interno" (segunda distro WSL, ou namespace) **via bastion** com `ssh -J`, sem expor a porta do servidor interno ao host.
 - **Desafio 2:** capture com `tcpdump` um `curl` para `localhost:8080` e identifique o handshake TCP (SYN, SYN-ACK, ACK).
 - **Desafio 3:** explique por que `ping google.com` pode falhar e `ping 142.250.x.x` funcionar, e como provar a causa.
+- **Desafio 4:** monte no `~/.ssh/config` os hosts `bastion` (`HostName 127.0.0.1`, `User <seu usuário>`) e `interno` (`HostName 127.0.0.1`, `ProxyJump bastion`) e inspecione a configuração efetiva sem conectar. **Verifique:** `ssh -G interno | grep -E '^(proxyjump|hostname) '` deve imprimir `hostname 127.0.0.1` e `proxyjump bastion`.
 
 ## Erros comuns nesta fase
 
@@ -238,6 +301,42 @@ Monte os namespaces `azul` e `verde`, suba um `python3 -m http.server` em um del
 - `rsync --delete` na direção errada.
 - Esquecer a barra final em `rsync origem/ destino/`.
 - Achar que `ip addr add` persiste após o reboot.
+- Subir o serviço com `--bind 127.0.0.1` (ou `localhost`) e esperar que outra máquina o acesse: confira o endereço de escuta no `ss -tln`.
+- Confundir `Connection refused` (o host respondeu, não há serviço na porta) com timeout (pacotes descartados por firewall ou rota ausente): são diagnósticos diferentes.
+- Montar namespaces/roteadores e esquecer a rota padrão nos clientes ou o `net.ipv4.ip_forward=1` no roteador.
+
+## Ponte com módulos anteriores
+
+| Vem de | Como reaparece aqui |
+|---|---|
+| Módulo 02 (pipes, redirecionamento, `&`) | `curl ... | head`, `servidor > log 2>&1 &`, `kill %1` |
+| Módulo 04 (`grep`, `awk`, `sort`, `uniq -c`) | Analisar o log de acesso do servidor que você mesmo subiu |
+| Módulo 05 (permissões) | `chmod 600` na chave SSH; `~/.ssh` com `700` |
+| Módulo 06 (processos, sinais) | `ss -p` liga porta a PID; `pkill -f` para derrubar o servidor do namespace |
+
+### Lab integrador — Quem está acessando o meu servidor?
+Cenário: você publicou os dados do laboratório num servidor web interno (`rede-b`) e quer descobrir quem o consulta e com que resultado — o mesmo raciocínio de analisar um `access.log` do Módulo 04, só que agora com tráfego real. Use a topologia do Lab 5 (com `ip_forward=1`).
+1. (Módulos 06 e 09) Suba o servidor gravando o log em arquivo:
+```bash
+sudo ip netns exec rede-b python3 -m http.server 8081 --bind 0.0.0.0 --directory $HOME/lab/dados > ~/lab/http.log 2>&1 &
+sleep 1
+sudo ip netns exec rede-b ss -tlnp | grep 8081          # quem escuta e qual PID
+```
+2. (Módulo 09) Gere tráfego a partir de `rede-a`, incluindo um erro:
+```bash
+for f in app.log usuarios.csv app.log nada.txt app.log; do
+  sudo ip netns exec rede-a curl -s -o /dev/null http://10.2.0.2:8081/$f
+done
+```
+3. (Módulo 04) Analise o log como se fosse produção:
+```bash
+grep '"GET' ~/lab/http.log | awk '{print $9}' | sort | uniq -c        # códigos de status
+grep '"GET' ~/lab/http.log | awk '{print $7}' | sort | uniq -c | sort -rn   # arquivos mais pedidos
+grep '"GET' ~/lab/http.log | awk '{print $1}' | sort -u               # IPs de origem
+```
+Esperado: `4 200` e `1 404`; `/app.log` com 3 pedidos; origem única `10.1.0.2` (o IP da `rede-a`, que o servidor enxerga atravessando o roteador).
+4. (Módulos 05 e 06) Confira o dono do log (`ls -l ~/lab/http.log`: é você, pois o redirecionamento é feito pelo seu shell) e encerre o servidor com `sudo pkill -f "[h]ttp.server 8081"`.
+5. Limpeza geral: `for n in rede-a rede-b rot; do sudo ip netns del $n; done`.
 
 ## Conexão com os módulos seguintes
 

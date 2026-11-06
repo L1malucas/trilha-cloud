@@ -44,6 +44,10 @@ gitleaks detect --source . --verbose           # varre o histórico
 gitleaks protect --staged                      # só o que está no stage (use em pre-commit, Módulo 19)
 ```
 
+> `[TENTE VOCÊ]` Rodar o gitleaks sem instalar nada? Resposta: via Docker, `docker run --rm -v "$PWD":/repo zricethezav/gitleaks:latest detect --source /repo --no-git -v`. O `--no-git` varre os arquivos do diretório (sem depender do histórico); sem ele, varre os commits. Plante `AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` num arquivo de teste e veja o achado.
+
+> `[ATENÇÃO]` Achado no **histórico** não some apagando o arquivo: o segredo continua nos commits antigos e em qualquer clone. A ordem correta é (1) revogar/trocar a credencial, (2) só depois limpar o histórico (se necessário). Quem faz o inverso mantém uma credencial válida vazada.
+
 ### HashiCorp Vault (servidor de segredos)
 
 ```bash
@@ -66,6 +70,8 @@ vault token create -policy=app-leitura -ttl=1h          # token temporário e re
 
 O Vault também gera **credenciais dinâmicas** (ex.: usuário de banco que expira em 1 h) — o ideal de "segredo de vida curta".
 
+> `[TENTE VOCÊ]` Como provar que a política `app-leitura` realmente limita o token? Resposta: crie o token e use-o: `T=$(vault token create -policy=app-leitura -field=token)`, depois `VAULT_TOKEN=$T vault kv get secret/trilhashop/db` (funciona) e `VAULT_TOKEN=$T vault kv put secret/trilhashop/db senha=x` (retorna `permission denied`). Teste sempre o **negativo**: segurança é provar o que não pode.
+
 ### SOPS: segredos criptografados no Git
 
 O **SOPS** criptografa **só os valores** de arquivos YAML/JSON/`.env`, deixando as chaves legíveis, para versionar segredos com segurança (usando `age`, GPG ou KMS de nuvem).
@@ -78,6 +84,8 @@ sops --encrypt --age "$SOPS_AGE_RECIPIENTS" -i segredos.yaml     # criptografa n
 cat segredos.yaml                                                # valores ilegíveis, chaves visíveis
 sops --decrypt segredos.yaml                                     # exige a chave privada
 ```
+
+> `[TENTE VOCÊ]` O que o `git diff` mostra depois de trocar uma senha num arquivo SOPS? Resposta: só os valores cifrados (`ENC[AES256_GCM,data:...]`) mudam e as chaves (`DB_SENHA`) continuam legíveis, então o revisor sabe **qual** segredo mudou sem ver o valor. Para editar sem expor, `sops segredos.yaml` abre o texto decifrado no editor e recifra ao salvar.
 
 No Kubernetes: **External Secrets Operator** (sincroniza do Vault/KeyVault/Secrets Manager) ou **Sealed Secrets**.
 
@@ -99,6 +107,10 @@ checkov -d . --framework terraform,dockerfile,kubernetes      # políticas de Ia
 ```
 
 Dois ajustes de pipeline importantes: **falhar o build** em severidade alta/crítica (`--exit-code 1`), e manter um arquivo de **exceções com justificativa** (`.trivyignore`) para falsos positivos. O Módulo 22 mostra onde encaixar isso no GitHub Actions.
+
+> `[TENTE VOCÊ]` Rode o Trivy sem instalar. Resposta: `docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL alpine:3.10` (imagem antiga, vai listar CVEs) e, para arquivos de configuração, `docker run --rm -v "$PWD":/w aquasec/trivy:latest config /w`. Compare com `alpine:3.20`: o número de achados cai muito.
+
+> `[ATENÇÃO]` Montar `/var/run/docker.sock` num container dá a ele controle do Docker do host (módulo 20). Aqui é aceitável por ser uma ferramenta de scan **confiável e de uso local**; em CI compartilhado, prefira `trivy image --input arquivo.tar` com a imagem exportada por `docker save`.
 
 > `[TEORIA]` CVE (*Common Vulnerabilities and Exposures*) é o identificador público de uma falha (CVE-2024-xxxx); o **CVSS** dá a gravidade (0–10). Nem toda CVE é explorável no **seu** contexto: priorize por gravidade, exposição e existência de exploit. A cultura saudável é **atualizar com frequência** (patching) em vez de acumular dívida.
 
@@ -187,6 +199,8 @@ kube-bench run
 | 99,9% | ~43 min |
 | 99,99% | ~4 min 23 s |
 
+> `[TENTE VOCÊ]` Confirme a tabela acima com uma conta. Resposta: 30 dias = 43.200 min. Para 99,99%: `awk 'BEGIN{print 43200*0.0001}'` imprime `4.32` minutos (~4 min 19 s; a tabela usa ~30,4 dias por mês, daí a pequena diferença). O raciocínio: orçamento = `(1 - SLO) x tempo total`.
+
 ## Toil e automação
 
 **Toil** é trabalho operacional **manual, repetitivo, automatizável e sem valor duradouro** (reiniciar serviço à mão, rodar o mesmo script toda semana). SRE procura **limitar o toil a ~50% do tempo** e automatizar o resto — o que une este módulo aos de scripts (11), Ansible/Terraform (21) e CI/CD (22).
@@ -203,6 +217,8 @@ Quando algo quebra, a prioridade é **restaurar o serviço**, não achar o culpa
 6. **Aprender** — postmortem.
 
 > `[ATENÇÃO]` Durante o incidente, **registre horários e ações** (o que foi tentado, quando, com qual efeito). A memória falha sob estresse, e esse histórico é a matéria-prima do postmortem.
+
+> `[TENTE VOCÊ]` Quais dados de um incidente você já consegue tirar de um log? Resposta: início, fim, duração e volume de erros. Com os dados do laboratório: `grep ERROR ~/lab/dados/app.log | sed -n '1p;$p'` mostra o primeiro e o último erro, e `grep -c ERROR ~/lab/dados/app.log` conta quantos. Essa é a base da "linha do tempo" do postmortem.
 
 ## Postmortem *blameless*
 
@@ -251,11 +267,84 @@ No kind (Módulo 23), instale Kyverno e aplique a política "não-root" (Enforce
 ### Lab 5 — Incidente simulado
 Simule: derrube o banco da stack, deixe o alerta disparar (Módulo 24), conduza a resposta com papéis, e escreva o **postmortem blameless** e o runbook.
 
+### Lab 6 — Barreira de segredos no pre-commit (gitleaks + hook)
+Cenário: o time já vazou uma chave uma vez. Impeça a repetição na estação de trabalho.
+
+```bash
+cd ~/lab && rm -rf seg-hook && mkdir seg-hook && cd seg-hook && git init -q -b main
+cat > .git/hooks/pre-commit <<'EOF'
+#!/usr/bin/env bash
+docker run --rm -v "$PWD":/repo zricethezav/gitleaks:latest protect --source /repo --staged --redact -v \
+  || { echo "BLOQUEADO: segredo no stage. Revogue a credencial e remova do arquivo."; exit 1; }
+EOF
+chmod +x .git/hooks/pre-commit
+echo 'API_KEY=AKIAIOSFODNN7EXAMPLE' > config.env
+git add config.env && git commit -m "adiciona config"       # deve ser barrado
+git reset -q config.env && echo 'API_KEY=${API_KEY}' > config.env
+git add config.env && git commit -qm "config sem segredo" && git log --oneline
+```
+
+> `[ATENÇÃO]` Hook local pode ser pulado com `--no-verify`. Por isso o mesmo scan precisa rodar também no CI (módulo 22): o hook é conforto, o pipeline é a barreira.
+
+### Lab 7 — Endurecer um Dockerfile com Trivy
+Cenário: o scanner reprova o Dockerfile "que sempre funcionou". Corrija até passar.
+
+```bash
+mkdir -p ~/lab/dockerfile-seg && cd ~/lab/dockerfile-seg
+cat > Dockerfile <<'EOF'
+FROM ubuntu:latest
+RUN apt-get update && apt-get install -y curl
+COPY . /app
+CMD ["sleep", "infinity"]
+EOF
+docker run --rm -v "$PWD":/w aquasec/trivy:latest config /w            # lista achados (root, sem HEALTHCHECK...)
+cat > Dockerfile <<'EOF'
+FROM alpine:3.20
+RUN adduser -D -u 10001 app
+USER app
+COPY --chown=app:app Dockerfile /app/Dockerfile
+HEALTHCHECK CMD true
+CMD ["sleep", "infinity"]
+EOF
+docker run --rm -v "$PWD":/w aquasec/trivy:latest config /w            # menos (ou nenhum) achado
+```
+
+Anote quais regras sumiram e por quê: usuário não-root, versão fixa e HEALTHCHECK são os três mais comuns.
+
+### Lab 8 — Mini-postmortem a partir de logs
+Cenário: houve instabilidade hoje. Monte o relatório com dados, não de memória.
+
+```bash
+LOG=~/lab/dados/app.log
+echo "# Postmortem — instabilidade no servico-2"
+echo "## Resumo"; echo "Erros totais: $(grep -c ERROR $LOG)"
+echo "## Linha do tempo"
+grep ERROR "$LOG" | sed -n '1p;$p' | awk '{print "- " $1 " " $2 ": " $3 " " $4}'
+echo "## Servico mais afetado"
+grep ERROR "$LOG" | awk '{print $4}' | sort | uniq -c | sort -rn | head -1
+echo "## Acoes corretivas (dono, prazo)"
+echo "- [ ] Criar alerta para taxa de ERROR > 5% por 5 min (dono: ..., prazo: ...)"
+echo "- [ ] Escrever runbook do servico afetado (dono: ..., prazo: ...)"
+```
+
+Complete as ações com donos e prazos reais. Repare que o texto não cita pessoa nenhuma: é *blameless*.
+
 ### Desafios
 
 - **Desafio 1:** pipeline com **gitleaks + Trivy + Checkov**, falhando em severidade alta, com exceções justificadas.
 - **Desafio 2:** defina o SLO do TrilhaShop (99,5%), calcule o error budget, escreva a política de congelamento e o runbook do alerta principal.
 - **Desafio 3:** *game day*: um colega (ou você, em duas "personas") quebra algo sem avisar; vocês detectam, mitigam e documentam usando o processo de incidentes.
+- **Desafio 4:** amplie o `portao.sh` do lab integrador para também reprovar qualquer arquivo em `~/.ssh`-like (uma pasta de teste) com permissão diferente de `600` (chaves) ou `700` (diretório).
+
+  **Verifique:** com uma chave de teste em `chaves/id_teste` com `chmod 644`, `./portao.sh; echo $?` imprime `FALHA` para o arquivo e `1`; após `chmod 600 chaves/id_teste` e `chmod 700 chaves`, termina com `0`.
+
+- **Desafio 5:** gere com `sops`/`age` um arquivo cifrado, versione-o em um repositório de teste e escreva um teste que falhe se `grep -q 'ENC\[' segredos.yaml` não encontrar valores cifrados (evita commitar o arquivo em claro por engano).
+
+  **Verifique:** `grep -q 'ENC\[' segredos.yaml && echo cifrado` imprime `cifrado`; depois de `sops --decrypt segredos.yaml > segredos.yaml.claro`, o mesmo teste no arquivo em claro não imprime nada.
+
+- **Desafio 6:** escreva o runbook "Taxa de ERROR alta no servico-N" em Markdown com seções Sintoma, Impacto, Diagnóstico (comandos reais do módulo 12), Mitigação e Escalonamento, e um script `diagnostico.sh` que executa os comandos de diagnóstico.
+
+  **Verifique:** `./diagnostico.sh ~/lab/dados/app.log | head -5` imprime a contagem de ERROR por serviço, e `grep -c '^## ' runbook.md` imprime `5`.
 
 ## Erros comuns nesta fase
 
@@ -266,6 +355,48 @@ Simule: derrube o banco da stack, deixe o alerta disparar (Módulo 24), conduza 
 - SLO de 100% ou sem política para o orçamento.
 - Postmortem que procura culpados, e ações sem dono nem prazo.
 - Alertas sem runbook.
+- Revogar a credencial só depois de limpar o histórico (ou nem revogar): ela segue válida para quem já copiou.
+- Testar apenas o caminho feliz de uma política: sem o teste negativo (`permission denied`), você não sabe se ela restringe.
+- Montar `/var/run/docker.sock` em qualquer container "para facilitar".
+
+## Ponte com módulos anteriores
+
+| Vem de | Como reaparece aqui |
+|---|---|
+| Módulo 10 (firewall e segurança) | Menor privilégio e defesa em profundidade viram política, scan e Pod Security |
+| Módulo 05 (permissões) | `chmod 600` em chaves/segredos; `find -perm` como auditoria |
+| Módulo 19 (Git, hooks) | `pre-commit` com gitleaks; revogar > apagar do histórico |
+| Módulo 22 (CI/CD) | Scan que falha o build (`--exit-code 1`) e OIDC em vez de secret fixo |
+| Módulo 12 e 24 (logs, SLO) | Logs viram linha do tempo do postmortem; SLO define o orçamento |
+
+### Lab integrador — Portão de segurança local
+Reuna permissões (05), hook/segredos (19), scan de config (Trivy) e código de saída (11) num script que o CI do módulo 22 poderia chamar.
+
+```bash
+mkdir -p ~/lab/portao && cd ~/lab/portao
+echo 'DB_SENHA=troque' > segredos.env && chmod 644 segredos.env
+printf 'FROM alpine:3.20\nRUN adduser -D app\nUSER app\nHEALTHCHECK CMD true\nCMD ["sleep","infinity"]\n' > Dockerfile
+cat > portao.sh <<'EOF'
+#!/usr/bin/env bash
+set -uo pipefail
+falhas=0
+echo "==> permissões de arquivos de segredo"
+for f in *.env; do
+  [ -e "$f" ] || continue
+  perm=$(stat -c '%a' "$f")
+  if [ "$perm" != "600" ]; then echo "FALHA: $f está com $perm (esperado 600)"; falhas=$((falhas+1)); fi
+done
+echo "==> segredo em texto no código"
+if grep -rEi '(password|senha|api[_-]?key)\s*[:=]\s*\S+' --include='*.sh' --include='*.yml' . ; then
+  echo "FALHA: possível segredo em texto"; falhas=$((falhas+1))
+fi
+echo "==> configuração do Dockerfile (Trivy)"
+docker run --rm -v "$PWD":/w aquasec/trivy:latest config --exit-code 1 --severity HIGH,CRITICAL /w >/dev/null || { echo "FALHA: achados no Dockerfile"; falhas=$((falhas+1)); }
+echo "falhas: $falhas"; exit $(( falhas > 0 ))
+EOF
+chmod +x portao.sh && ./portao.sh; echo "saída: $?"      # 1 por causa do chmod 644
+chmod 600 segredos.env && ./portao.sh; echo "saída: $?"   # 0 se o Dockerfile estiver limpo
+```
 
 ## Conexão com os módulos seguintes
 

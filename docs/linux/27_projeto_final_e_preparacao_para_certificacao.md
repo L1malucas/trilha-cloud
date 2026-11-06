@@ -70,6 +70,30 @@ Se outra pessoa (ou você, numa distro WSL **nova**, importada do snapshot do M�
 ![Dashboard final do Grafana com os quatro sinais de ouro da API do TrilhaShop em funcionamento](screenshots/27-projeto-final-e-preparacao-para-certificacao/01-dashboard-final.png)
 > `[PRINT]` Passo a passo para capturar: com o projeto no ar e tráfego sintético (`hey` ou `ab`), abrir o dashboard da API no Grafana. Capturar latência, tráfego, erros e saturação.
 
+## Desafios integradores
+
+Cada desafio cruza vários módulos e simula um pedido real de trabalho. Faça no projeto `trilhashop-linux`, sem consultar o texto dos módulos (só `man` e a documentação oficial).
+
+- **Desafio 1 — Deploy que se prova sozinho (módulos 11, 19, 20, 22).** Escreva um `scripts/smoke.sh` que suba a stack do Compose, espere o banco ficar saudável, teste `/saude` e `/produtos` com `curl -f` e derrube tudo, saindo com `0` só se tudo passar. Chame-o em um job do workflow e proteja a `main` exigindo esse check.
+
+  **Verifique:** `./scripts/smoke.sh; echo $?` imprime a linha de cada etapa e termina com `0`; ao parar o banco antes (`docker compose stop banco`), o script falha em menos de 60 s com código `1`, e `docker compose ps -q | wc -l` imprime `0` ao final (limpeza garantida).
+
+- **Desafio 2 — Segredo vazou (módulos 19, 22, 25).** Plante uma chave falsa num commit antigo de um branch de teste. Detecte-a com `gitleaks` varrendo o histórico, escreva o procedimento de resposta (revogar, trocar, limpar) e acrescente ao pipeline uma etapa que bloqueie o PR em caso de achado.
+
+  **Verifique:** `docker run --rm -v "$PWD":/repo zricethezav/gitleaks:latest detect --source /repo -v; echo $?` termina com `1` e cita o arquivo e o commit; depois da correção no branch, o mesmo comando termina com `0`.
+
+- **Desafio 3 — Mudança de configuração sem derrubar nada (módulos 20, 21, 23).** Troque o nível de log da API apenas alterando um ConfigMap versionado no Git e aplicando com `kubectl apply -k`, garantindo que os Pods sejam recriados em rolling update (sem ficar com zero réplicas prontas) e que um `rollout undo` volte ao estado anterior.
+
+  **Verifique:** `kubectl rollout status deploy/api` imprime `successfully rolled out`; `kubectl get deploy api -o jsonpath='{.status.availableReplicas}'` nunca mostra `0` durante a troca (acompanhe com `watch`); após `kubectl rollout undo deploy/api`, `kubectl exec deploy/api -- printenv LOG_LEVEL` volta ao valor antigo.
+
+- **Desafio 4 — Incidente de ponta a ponta (módulos 12, 16, 23, 24, 25).** Provoque 5xx na API (por exemplo, apontando a variável do banco para um host inexistente), deixe o alerta de erro disparar, siga o runbook até a causa usando `describe`, `logs` e a métrica, mitigue com rollback e escreva o postmortem *blameless* com linha do tempo e ações corretivas.
+
+  **Verifique:** o alerta aparece como `firing` em `curl -s localhost:9090/api/v1/alerts | grep -c firing` (valor maior que `0`) durante o incidente e volta a `0` depois do rollback; `grep -c '^## ' postmortem.md` imprime pelo menos `5` (resumo, linha do tempo, causa, aprendizados, ações).
+
+- **Desafio 5 — Auditoria de reprodutibilidade (módulos 00, 15, 21, 25).** Em uma distro WSL nova (`wsl --import` do snapshot do módulo 00), clone o repositório e reconstrua tudo só com o README. Registre cada passo que precisou de "ajuste à mão" e transforme-o em código (script, Makefile ou playbook) até a reconstrução rodar sem intervenção.
+
+  **Verifique:** `time make up && make test; echo $?` conclui com `0` sem nenhuma pergunta interativa, e `git status --porcelain | wc -l` imprime `0` (nada ficou fora do repositório).
+
 ## Preparação para certificações
 
 A trilha cobre bases de várias provas. Use o quadro para planejar **uma de cada vez**:
@@ -120,6 +144,8 @@ Antes de apagar: **tire os prints** pendentes dos módulos e **exporte** o que q
 - Estudar para prova prática só lendo.
 - Tentar todas as certificações ao mesmo tempo.
 - Esquecer de desmontar e deixar o ambiente consumindo recursos.
+- Pular os desafios integradores porque "o projeto já subiu": é neles que aparecem as falhas de integração entre módulos.
+- Resolver o problema do README "na mão" e não registrar o ajuste em código, o que quebra a reconstrução em ambiente novo.
 
 ## `[REFERÊNCIA]`
 

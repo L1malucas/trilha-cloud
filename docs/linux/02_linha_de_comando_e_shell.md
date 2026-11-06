@@ -35,6 +35,8 @@ ps -p $$               # o processo do shell atual
 tty                    # o terminal em que você está
 ```
 
+> `[TENTE VOCÊ]` Descubra em que "linha" e com que programa você está falando com o Linux: `tty`, `echo $0` e `ps -p $$ -o comm=`. Resposta: `tty` devolve algo como `/dev/pts/0`, e os outros dois mostram `bash`. O truque está no `$$`: é uma variável especial que guarda o PID do **próprio shell**, então o `ps` acaba perguntando "quem sou eu?".
+
 ## Anatomia de um comando
 
 ```
@@ -75,6 +77,8 @@ As seções do `man`: 1 comandos, 5 formatos de arquivo, 8 administração. `man
 
 > `[TENTE VOCÊ]` Descubra, só com o terminal, qual opção do `ls` ordena por tamanho. Resposta: `man ls` e procure por `-S` (`/sort`, Enter).
 
+> `[TENTE VOCÊ]` Mostre que opções curtas se combinam: rode `ls -l -h -S /var/log | head -4` e depois `ls -lhS /var/log | head -4`. Resposta: a saída é idêntica, com os maiores arquivos primeiro (`-S` ordena por tamanho). O shell só entrega ao `ls` a lista de palavras; é o `ls` que entende `-lhS` como três opções coladas.
+
 ## Navegação: caminhos absolutos e relativos
 
 Um caminho **absoluto** começa na raiz (`/etc/hosts`), funciona de qualquer lugar. Um **relativo** parte de onde você está (`../lab/dados`). Atalhos: `.` (aqui), `..` (pai), `~` (home), `-` (diretório anterior).
@@ -112,6 +116,8 @@ export PATH="$PATH:$HOME/bin"     # acrescenta uma pasta
 
 > `[ATENÇÃO]` Variáveis definidas na linha de comando **somem** ao fechar o terminal. Para persistir, grave em `~/.bashrc` (e abra outro terminal ou rode `source ~/.bashrc`).
 
+> `[TENTE VOCÊ]` Entenda o PATH na prática. Rode `echo 'echo oi' > /tmp/oi.sh; chmod +x /tmp/oi.sh; oi.sh`. Resposta: erro `command not found`, porque `/tmp` não está no PATH. Agora `/tmp/oi.sh` imprime `oi` (caminho explícito) e `PATH=$PATH:/tmp oi.sh` também funciona (a pasta entrou no PATH só para aquele comando). Raciocínio: o shell só procura nome "puro" nas pastas do PATH; se o nome tem `/`, ele vai direto ao caminho. Depois, `rm /tmp/oi.sh`.
+
 ## Aspas: ' ' x " " x ` `
 
 ```bash
@@ -143,6 +149,10 @@ Linha 1
 Linha 2
 EOF
 ```
+
+> `[TENTE VOCÊ]` Separe a saída normal do erro: `ls /etc /nao-existe > /tmp/o.txt 2> /tmp/e.txt; wc -l /tmp/o.txt /tmp/e.txt`. Resposta: o `e.txt` tem exatamente **1** linha (a reclamação do `ls`) e o `o.txt` tem a listagem inteira de `/etc`. Cada canal (1 e 2) vai para o seu destino — por isso um script consegue guardar erros em um arquivo e resultados em outro.
+
+> `[ATENÇÃO]` A **ordem** dos redirecionamentos importa. `ls /nao-existe > /tmp/x.txt 2>&1` manda tudo para o arquivo; já `ls /nao-existe 2>&1 > /tmp/x.txt` ainda mostra o erro na tela. Leia da esquerda para a direita: `2>&1` copia "para onde o 1 aponta *agora*". No segundo caso, o 1 ainda apontava para o terminal.
 
 ## Pipes: a ideia mais poderosa do Unix
 
@@ -204,6 +214,8 @@ echo $?                             # código de saída do último comando (0 = 
 
 > `[ATENÇÃO]` O código de saída `0` significa **sucesso**; qualquer outro valor é erro. É o que `&&`, `||` e os scripts (Módulo 11) usam para decidir o próximo passo.
 
+> `[ATENÇÃO]` Antes dos labs, um erro silencioso: `NOME=Ana; bash -c 'echo "[$NOME]"'` imprime `[]`. A variável existe no seu shell, mas o `bash` filho não a herdou. Só `export NOME` a coloca no ambiente dos filhos. É a raiz de metade dos "no meu terminal funciona, no script não".
+
 ## Laboratórios
 
 ### Lab 1 — Navegação e ajuda
@@ -221,11 +233,62 @@ echo $?                             # código de saída do último comando (0 = 
 2. Defina um prompt próprio: `export PS1='\u@\h:\w\$ '` e teste.
 3. Abra um novo terminal e confirme que tudo persistiu.
 
+### Lab 4 — Triagem de um log sem abrir editor
+
+Cenário: o time de aplicação avisa que "deu erro de manhã". Você só tem o terminal. Monte a triagem com redirecionamento e pipes:
+
+```bash
+cd ~/lab/dados
+grep -c ERROR app.log                          # quantos erros no total
+grep ERROR app.log | head -3 > ~/lab/erros-amostra.txt
+tail -n 5 app.log | tee ~/lab/ultimas.txt | wc -l      # grava e conta ao mesmo tempo (esperado: 5)
+grep ERROR nao-existe.log 2> ~/lab/erro-triagem.txt; echo "saída: $?"
+[ -s ~/lab/erro-triagem.txt ] && echo "o erro foi capturado no arquivo"
+```
+
+Repare no `echo $?` logo após o `grep` que falhou: o código de saída é `2` (erro de uso, arquivo inexistente). Quando o `grep` só não acha nada, o código é `1`. É exatamente essa diferença que os scripts do Módulo 11 usam para decidir o que fazer.
+
+### Lab 5 — Seu próprio comando no PATH
+
+Cenário: você repete o mesmo diagnóstico toda hora e quer virar um comando. Crie `~/bin`, ponha um script lá e coloque a pasta no PATH:
+
+```bash
+mkdir -p ~/bin
+cat > ~/bin/hoje <<'EOF'
+#!/usr/bin/env bash
+echo "Hoje é $(date +%d/%m/%Y) e você é $USER em $(hostname)"
+EOF
+chmod +x ~/bin/hoje
+hoje                         # ainda não encontra
+export PATH="$PATH:$HOME/bin"
+hoje                         # agora funciona de qualquer pasta
+type hoje                    # hoje is /home/seu-usuario/bin/hoje
+```
+
+Note o `<<'EOF'` com aspas: sem elas o shell expandiria `$(date ...)` na hora de **criar** o arquivo, e o script gravaria uma data fixa. Para persistir, acrescente `export PATH="$PATH:$HOME/bin"` ao `~/.bashrc`.
+
+### Lab 6 — Pré-requisitos antes de uma tarefa
+
+Cenário: antes de rodar um deploy você precisa saber se a máquina tem as ferramentas. Use `&&`, `||` e o código de saída:
+
+```bash
+command -v git >/dev/null    && echo "git ok"     || echo "git FALTA"
+command -v curl >/dev/null   && echo "curl ok"    || echo "curl FALTA"
+command -v nginx >/dev/null  && echo "nginx ok"   || echo "nginx FALTA"
+mkdir -p ~/lab/tmp-x && cd ~/lab/tmp-x && pwd
+cd /pasta/que/nao/existe || echo "não consegui entrar; ficando em $PWD"
+grep -q ERROR ~/lab/dados/app.log; echo "grep -q devolveu $?"
+```
+
+O `command -v` não imprime nada se o programa não existe e devolve código diferente de zero — é a forma portátil de perguntar "isso está instalado?". O `grep -q` é "quieto": só devolve o código (0 se achou), perfeito para `if` e `&&`.
+
 ### Desafios
 
 - **Desafio 1:** em **uma linha** (com pipes), liste os 5 maiores diretórios dentro de `/var` (`du`, `sort -h`, `head`).
 - **Desafio 2:** escreva um comando que grave em `relatorio.txt` o resultado de `date`, `whoami` e `hostname`, sem sobrescrever execuções anteriores.
 - **Desafio 3:** explique, sem executar, a diferença entre `echo '$HOME'`, `echo "$HOME"` e `echo $(echo $HOME)`.
+- **Desafio 4:** rode `ls ~/lab/dados /nao-existe` de modo que a saída normal vá para `~/lab/ok.txt`, o erro para `~/lab/erro.txt` e o código de saída do `ls` seja impresso na tela, tudo numa única linha encadeada.
+  **Verifique:** `grep -c access.log ~/lab/ok.txt; wc -l < ~/lab/erro.txt` deve mostrar `1` e depois `1`, e o código impresso na tela deve ser `2`.
 
 ## Erros comuns nesta fase
 
@@ -234,6 +297,42 @@ echo $?                             # código de saída do último comando (0 = 
 - Redirecionar com `>` para um arquivo importante e sobrescrevê-lo sem querer.
 - Esperar que `export` persista depois de fechar o terminal.
 - Confundir `>` (sobrescreve) com `>>` (acrescenta).
+- Inverter a ordem de `2>&1` e `>` e se perguntar por que o erro continua na tela.
+- Criar um script e esquecer o `chmod +x` (ou o `./` quando a pasta não está no PATH).
+- Usar `$(...)` dentro de here-doc **sem** aspas no delimitador e gravar o valor de hoje no arquivo em vez do comando.
+
+## Ponte com módulos anteriores
+
+| Vem de | Como reaparece aqui |
+|---|---|
+| Módulo 00 — Windows Terminal + Ubuntu | É o **terminal** que abriga o **shell** (bash) descritos no começo deste módulo |
+| Módulo 00 — `~/lab` e `gera-lab.sh` | Os dados de `~/lab/dados` alimentam todos os pipes e redirecionamentos |
+| Módulo 00 — `wslpath`, `explorer.exe` | Mostram que o shell roda programas de outro mundo (Windows) como qualquer comando |
+| Módulo 01 — `/etc/os-release`, `uname`, `hostnamectl` | São os comandos que você agora encadeia, redireciona e transforma em script |
+| Módulo 01 — FHS (`/etc`, `/var`, `/usr`) | Viram os caminhos absolutos e relativos que você navega |
+
+### Lab integrador — Um painel do ambiente em um comando
+
+Junte o que veio do 00 e do 01 (dados do lab, `os-release`, `uname`, FHS) com variáveis, here-doc, PATH, pipes e `tee`:
+
+```bash
+mkdir -p ~/bin
+cat > ~/bin/info-lab <<'EOF'
+#!/usr/bin/env bash
+. /etc/os-release
+echo "Distro : $PRETTY_NAME"
+echo "Kernel : $(uname -r)"
+echo "Usuário: $USER em $(hostname)"
+echo "Logs   : $(wc -l < "$HOME/lab/dados/access.log") linhas em access.log"
+echo "/etc   : $(ls /etc | wc -l) itens"
+EOF
+chmod +x ~/bin/info-lab
+export PATH="$PATH:$HOME/bin"
+info-lab | tee ~/lab/info-lab.txt
+wc -l ~/lab/info-lab.txt
+```
+
+Esperado: cinco linhas no painel, `5000 linhas em access.log` e `5 /home/.../info-lab.txt` no `wc`. Se `info-lab` não for encontrado, o PATH não foi exportado nesta sessão.
 
 ## Conexão com os módulos seguintes
 

@@ -46,6 +46,8 @@ commit → build → testes → análise (lint, scan) → empacotar (imagem) →
 
 Jobs rodam **em paralelo** por padrão; `needs:` cria dependência/ordem entre eles.
 
+> `[TENTE VOCÊ]` Dois jobs sem `needs:` rodam em que ordem? Resposta: em **paralelo**, sem ordem garantida. Se o `deploy` precisa esperar o `build`, declare `needs: build`. Quando um job do qual outro depende falha, o dependente é **pulado** (`skipped`), não executado.
+
 ## Primeiro workflow: CI de shell scripts
 
 No repositório do seu laboratório (Módulo 15), crie `.github/workflows/ci.yml`:
@@ -89,7 +91,13 @@ jobs:
 
 Faça `git push` e acompanhe na aba **Actions** do GitHub. Um check vermelho no PR **bloqueia o merge** se a *branch protection* exigir (Módulo 19).
 
+> `[TENTE VOCÊ]` Dá para validar o YAML do workflow antes do push, sem esperar o GitHub? Resposta: sim. `docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint:latest` aponta erros de sintaxe, de expressão `${{ }}` e de `needs` inexistente. Para só checar YAML: `python3 -c "import yaml,sys; yaml.safe_load(open('.github/workflows/ci.yml'))"` (sem saída = válido).
+
+> `[TENTE VOCÊ]` Rode os mesmos passos do job `lint` na sua máquina. Resposta: `shellcheck scripts/*.sh; echo $?` — o código de saída que o runner veria é o mesmo: `0` passa, diferente de `0` deixa o check vermelho. Se funciona local, só falha no CI por diferença de ambiente.
+
 > `[ATENÇÃO]` Fixe versões das actions (`@v4`, ou melhor, o *SHA* do commit) e dê ao `GITHUB_TOKEN` só as `permissions` necessárias. Actions de terceiros são código executado com acesso ao seu repositório e aos secrets.
+
+> `[ATENÇÃO]` A indentação do YAML é parte da sintaxe: um `run:` com a lista de comandos desalinhada vira erro de parse (ou, pior, um passo que roda só metade). Use `run: |` para blocos de várias linhas e valide com `actionlint`.
 
 ## Build e publicação de imagem
 
@@ -128,6 +136,8 @@ jobs:
 ```
 
 Esse workflow dispara ao criar uma **tag** `v1.0.0`, constrói a imagem do Módulo 20 e publica no GHCR com cache.
+
+> `[TENTE VOCÊ]` O workflow acima não dispara num `git push` comum. Por quê, e como disparar? Resposta: o gatilho é `on.push.tags: ["v*"]`, então só reage a tags. Dispare com `git tag -a v0.1.0 -m "release" && git push origin v0.1.0`. Para testes sem tag, adicione `workflow_dispatch:` em `on:` e execute pela aba Actions.
 
 ## Secrets e ambientes
 
@@ -183,6 +193,8 @@ Como colocar a versão nova no ar **sem derrubar o serviço**:
 
 **Feature flags** separam **deploy** de **release**: o código vai para produção desligado e é ativado (para um grupo, ou %) sem novo deploy — base do desenvolvimento *trunk-based* (Módulo 19).
 
+> `[TENTE VOCÊ]` Num blue/green, o que realmente "vira" na hora da troca? Resposta: o roteamento do tráfego (o `upstream` do proxy ou o selector do Service), não as aplicações. As duas versões já estão de pé; a troca é uma mudança de ponteiro, por isso o rollback é só voltar o ponteiro.
+
 Exemplo de rolling update com Compose/SSH (conceito), e em Kubernetes (Módulo 23): `kubectl rollout`, `kubectl rollout undo`.
 
 ## Artefatos e dependências
@@ -209,11 +221,96 @@ Job `deploy` num `environment` com aprovação manual que atualiza uma stack Com
 ### Lab 5 — Runner self-hosted (privado)
 Instale um runner self-hosted no WSL e rode um job nele.
 
+### Lab 6 — Rodar localmente o que o pipeline roda
+Cenário: antes de abrir o PR, reproduza os passos do `ci.yml` no WSL, para não gastar minutos de CI com erro bobo.
+
+```bash
+cd ~/lab && rm -rf ci-local && mkdir -p ci-local/scripts ci-local/.github/workflows && cd ci-local && git init -q -b main
+cat > scripts/ok.sh <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "tudo certo"
+EOF
+cat > scripts/ruim.sh <<'EOF'
+#!/usr/bin/env bash
+rm -rf $DIR/*
+EOF
+cat > .github/workflows/ci.yml <<'EOF'
+name: CI
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: shellcheck scripts/*.sh
+EOF
+sudo apt install -y shellcheck
+shellcheck scripts/*.sh; echo "saída: $?"      # SC2086 e SC2115 em ruim.sh -> falharia no CI
+docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint:latest   # sem saída = workflow válido
+```
+
+Corrija `ruim.sh` (aspas e `${DIR:?}`) até o `shellcheck` sair com `0`. Esse é exatamente o ciclo "falhar rápido".
+
+### Lab 7 — Blue/green local com Nginx
+Cenário: publicar a versão 2 sem downtime e poder voltar em segundos.
+
+```bash
+mkdir -p ~/lab/bluegreen && cd ~/lab/bluegreen
+docker network create bg 2>/dev/null || true
+mkdir -p v1 v2 && echo "versao 1" > v1/index.html && echo "versao 2" > v2/index.html
+docker run -d --name azul  --network bg -v "$PWD/v1":/usr/share/nginx/html:ro nginx:1.27
+docker run -d --name verde --network bg -v "$PWD/v2":/usr/share/nginx/html:ro nginx:1.27
+cat > upstream.conf <<'EOF'
+server { listen 80; location / { proxy_pass http://azul:80; } }
+EOF
+docker run -d --name borda --network bg -p 127.0.0.1:8097:80 -v "$PWD/upstream.conf":/etc/nginx/conf.d/default.conf:ro nginx:1.27
+curl -s localhost:8097                                    # versao 1
+sed -i 's/azul/verde/' upstream.conf && docker exec borda nginx -s reload
+curl -s localhost:8097                                    # versao 2
+sed -i 's/verde/azul/' upstream.conf && docker exec borda nginx -s reload
+curl -s localhost:8097                                    # rollback: versao 1
+docker rm -f azul verde borda; docker network rm bg
+```
+
+### Lab 8 — Gatilhos e variáveis: entender o que dispara o quê
+Cenário: o time reclama que "o pipeline rodou duas vezes". Leia e explique este trecho sem executar.
+
+```yaml
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+```
+
+Uma branch com PR aberto gera `pull_request` a cada push; ao fazer o merge, o `push` na `main` gera outra execução. Duas execuções, dois eventos, nada de bug. Para evitar o desperdício, restrinja `push` à `main` (como fez o `ci.yml` do módulo) e use `concurrency:` para cancelar execuções antigas da mesma branch:
+
+```yaml
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+```
+
 ### Desafios
 
 - **Desafio 1:** pipeline completo `lint → test → scan (Trivy) → build → push → deploy (aprovação)` para a API, com cada etapa dependendo da anterior.
 - **Desafio 2:** implemente um deploy **blue/green** com dois containers e um Nginx que troca o `upstream` por script, e prove rollback em segundos.
 - **Desafio 3:** versionamento automático: gere `vX.Y.Z` a partir de Conventional Commits (por exemplo, com `release-please`) e publique release notes.
+- **Desafio 4:** no `pipeline.sh` do lab integrador, acrescente uma etapa de scan com `docker run --rm aquasec/trivy:latest image --exit-code 1 --severity CRITICAL pipeline-demo:<versão>` (monte `-v /var/run/docker.sock:/var/run/docker.sock`) e faça o pipeline falhar em vulnerabilidade crítica.
+
+  **Verifique:** `./pipeline.sh; echo $?` imprime `0` com uma imagem limpa; ao trocar a base por uma imagem antiga (ex.: `alpine:3.10`), a etapa de scan falha e o `echo $?` imprime `1`.
+
+- **Desafio 5:** reescreva o Lab 7 para que o chaveamento seja um script `troca.sh azul|verde` que valida a saúde do destino (`curl -f`) **antes** de recarregar o Nginx e aborta se estiver fora.
+
+  **Verifique:** `./troca.sh verde && curl -s localhost:8097` imprime `versao 2`; com o container verde parado, `./troca.sh verde; echo $?` imprime um erro e `1`, e `curl -s localhost:8097` continua devolvendo `versao 1`.
+
+- **Desafio 6:** em um repositório de teste, configure um workflow com `concurrency` e `permissions` mínimas e um job `deploy` com `environment: producao`; valide tudo com `actionlint`.
+
+  **Verifique:** `docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint:latest; echo $?` termina com `0` e sem nenhuma linha de erro.
 
 ## Erros comuns nesta fase
 
@@ -223,6 +320,57 @@ Instale um runner self-hosted no WSL e rode um job nele.
 - Actions sem versão fixa e `GITHUB_TOKEN` com permissão ampla.
 - Deploy direto em produção sem aprovação nem rollback.
 - "Testar em produção" por falta de ambiente de homologação.
+- Validar o workflow só no GitHub (cada erro de YAML custa um ciclo de commit); rode `actionlint` e os passos localmente antes.
+- Pipeline que dispara duas vezes (push + PR) por falta de filtro de branch e de `concurrency`.
+- Trocar o proxy para a versão nova sem checar a saúde do destino antes (blue/green sem health check).
+
+## Ponte com módulos anteriores
+
+| Vem de | Como reaparece aqui |
+|---|---|
+| Módulo 11 (scripts) | Cada `run:` é um script; `set -euo pipefail` e códigos de saída decidem o verde/vermelho |
+| Módulo 19 (Git) | Gatilhos por branch/tag, PR com check obrigatório, SemVer nas tags |
+| Módulo 20 (Docker) | `docker build` e push no pipeline; healthcheck do container para o smoke test |
+| Módulo 21 (Terraform/Ansible) | `terraform fmt -check`/`validate` e `ansible-playbook --check` como etapas de CI |
+| Módulo 12 (logs) | Log do job é o "journal" do pipeline; saber ler a falha primeiro |
+
+### Lab integrador — Pipeline local de ponta a ponta
+Monte um "pipeline" em shell que executa as mesmas etapas do CI, usando Git (19), Docker (20) e Terraform (21), e que sai com código diferente de zero na primeira falha.
+
+```bash
+mkdir -p ~/lab/pipeline-local && cd ~/lab/pipeline-local
+cat > pipeline.sh <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+etapa() { echo "==> $1"; }
+
+etapa "lint de scripts"
+shellcheck ./*.sh
+
+etapa "validar IaC"
+mkdir -p tf && cat > tf/main.tf <<'TF'
+resource "terraform_data" "exemplo" {
+  input = "ok"
+}
+TF
+terraform -chdir=tf fmt -check
+terraform -chdir=tf init -input=false >/dev/null
+terraform -chdir=tf validate
+
+etapa "build da imagem (versão = commit)"
+VERSAO=$(git rev-parse --short HEAD 2>/dev/null || echo local)
+printf 'FROM alpine:3.20\nCMD ["echo","olá"]\n' > Dockerfile
+docker build -q -t pipeline-demo:"$VERSAO" .
+
+etapa "smoke test"
+docker run --rm pipeline-demo:"$VERSAO" | grep -q 'olá'
+echo "PIPELINE OK (pipeline-demo:$VERSAO)"
+EOF
+chmod +x pipeline.sh && git init -q -b main 2>/dev/null; git add -A && git commit -qm "chore: pipeline local" 2>/dev/null || true
+./pipeline.sh; echo "código de saída: $?"
+```
+
+Estrague algo de propósito (um espaço errado no `main.tf`, uma variável sem aspas no script) e veja a etapa que quebra interromper tudo: é o "falhar rápido" na prática.
 
 ## Conexão com os módulos seguintes
 

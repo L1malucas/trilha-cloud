@@ -94,6 +94,10 @@ k delete pod nginx
 k run teste --image=nginx --dry-run=client -o yaml > pod.yaml     # gera YAML sem criar
 ```
 
+> `[TENTE VOCÊ]` Apague um Pod criado com `k run` e depois um Pod de um Deployment. Qual volta? Resposta: só o do Deployment. O Pod "solto" não tem controlador cuidando dele; o do Deployment é recriado pelo ReplicaSet para manter o número de réplicas. É o laço de reconciliação visível: `k delete pod <pod-do-deploy>; k get pods -w`.
+
+> `[TENTE VOCÊ]` Como ver o YAML completo de um recurso que já existe? Resposta: `k get pod nginx -o yaml` mostra tudo (inclusive `status`); para uma explicação dos campos use `k explain pod.spec.containers.resources`, que serve até na prova CKA.
+
 ## Deployment: o que você usa de verdade
 
 Um **Deployment** declara "quero N réplicas deste Pod" e cuida de **atualizações graduais** (*rolling update*) e **rollback**. Ele cria um **ReplicaSet**, que mantém os Pods.
@@ -149,6 +153,10 @@ k delete pod <um-pod>                          # veja o controlador recriar
 
 **Probes**: **readiness** diz se o Pod está **pronto para receber tráfego** (falhou → sai do Service, sem reiniciar); **liveness** diz se está **vivo** (falhou → o kubelet reinicia o container); **startup** protege aplicações lentas na inicialização.
 
+> `[TENTE VOCÊ]` Troque a imagem para uma que não existe (`k set image deploy/api api=nginx:9.99`) e observe `k get pods` e `k rollout status deploy/api`. Resposta: aparecem Pods novos em `ErrImagePull`/`ImagePullBackOff`, mas os **antigos continuam Running**, porque `maxUnavailable: 1` impede o Deployment de derrubar tudo. Volte com `k rollout undo deploy/api`. É por isso que o rolling update protege você de uma versão quebrada.
+
+> `[ATENÇÃO]` Uma `readinessProbe` apontando para o caminho ou porta errados não reinicia nada: o Pod fica `Running` com `READY 0/1` para sempre e o Service não manda tráfego para ele. O erro nasce quando você olha só o STATUS e esquece a coluna READY.
+
 ## Service: um endereço estável
 
 Pods mudam de IP; o **Service** dá um **IP/nome estáveis** e balanceia entre os Pods que casam com o seu `selector`.
@@ -176,6 +184,8 @@ k get svc,endpoints                              # endpoints = IPs dos Pods atr�
 k run -it --rm tmp --image=busybox -- wget -qO- http://api       # DNS interno: <svc>.<ns>.svc.cluster.local
 k port-forward svc/api 8080:80                   # acessa pelo seu localhost
 ```
+
+> `[TENTE VOCÊ]` O Service existe, mas `k run -it --rm tmp --image=busybox -- wget -qO- http://api` dá timeout. Qual o primeiro comando? Resposta: `k get endpoints api`. Se a coluna ENDPOINTS está `<none>`, o `selector` do Service não casa com os labels dos Pods (ou os Pods não estão Ready). Compare com `k get pods --show-labels`.
 
 ## Ingress: HTTP para fora
 
@@ -225,6 +235,8 @@ k create secret generic db --from-literal=senha='s3gredo'
 ```
 
 > `[ATENÇÃO]` Um **Secret não é criptografado**, só codificado em base64 (`echo c2VncmVkbw== | base64 -d`). Qualquer um com acesso de leitura ao Secret lê o valor. Para segurança real: criptografia em repouso do etcd, **RBAC restritivo** e cofre externo (Vault, External Secrets, SOPS — Módulo 25).
+
+> `[TENTE VOCÊ]` Mudei o ConfigMap, mas a aplicação continua com o valor antigo. Por quê? Resposta: variáveis de ambiente vindas de ConfigMap/Secret são lidas **na criação do Pod**. Depois de `k edit`/`apply` no ConfigMap, force novos Pods com `k rollout restart deploy/api`. Já os arquivos montados como volume são atualizados sozinhos (após alguns segundos).
 
 ## Armazenamento: PV, PVC e StorageClass
 
@@ -278,6 +290,8 @@ k create rolebinding leitor-ver-pods --role=ver-pods --serviceaccount=dev:leitor
 k auth can-i list pods -n dev --as=system:serviceaccount:dev:leitor    # yes
 k auth can-i delete pods -n dev --as=system:serviceaccount:dev:leitor  # no
 ```
+
+> `[TENTE VOCÊ]` Como listar tudo o que uma ServiceAccount pode fazer? Resposta: `k auth can-i --list -n dev --as=system:serviceaccount:dev:leitor` mostra a tabela de verbos/recursos permitidos. Útil para auditar: se aparecer `*` em recursos, o RBAC está largo demais.
 
 **HPA** (*Horizontal Pod Autoscaler*) ajusta réplicas pela carga (exige o *metrics-server*):
 
@@ -354,12 +368,105 @@ Injete ConfigMap e Secret; suba um Postgres com PVC; apague o Pod e prove que os
 ### Lab 5 — Quebrar e consertar
 Provoque, de propósito: `ImagePullBackOff`, `CrashLoopBackOff`, `Pending` (requests enormes) e probe falhando; diagnostique cada um só com `get`/`describe`/`logs`.
 
+### Lab 6 — Config mudou, Pods não: rollout restart
+Cenário: o time mudou o nível de log no ConfigMap e "nada aconteceu".
+
+```bash
+kubectl create ns lab6
+kubectl -n lab6 create configmap app-config --from-literal=LOG_LEVEL=info
+kubectl -n lab6 create deployment web --image=busybox:1.36 --replicas=1 -- sh -c 'while true; do echo "nivel=$LOG_LEVEL"; sleep 5; done'
+kubectl -n lab6 set env deployment/web --from=configmap/app-config
+kubectl -n lab6 rollout status deploy/web
+kubectl -n lab6 logs deploy/web --tail=2                  # nivel=info
+kubectl -n lab6 create configmap app-config --from-literal=LOG_LEVEL=debug --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n lab6 logs deploy/web --tail=1                  # continua nivel=info
+kubectl -n lab6 rollout restart deploy/web && kubectl -n lab6 rollout status deploy/web
+kubectl -n lab6 logs deploy/web --tail=1                  # agora nivel=debug
+kubectl delete ns lab6
+```
+
+### Lab 7 — Readiness falhando: Running mas sem tráfego
+Cenário: o deploy "subiu", mas o site está fora do ar.
+
+```bash
+kubectl create ns lab7
+cat <<'EOF' | kubectl -n lab7 apply -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: site }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: site } }
+  template:
+    metadata: { labels: { app: site } }
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27
+          readinessProbe:
+            httpGet: { path: /nao-existe, port: 80 }
+            periodSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata: { name: site }
+spec:
+  selector: { app: site }
+  ports: [{ port: 80 }]
+EOF
+sleep 10
+kubectl -n lab7 get pods                       # READY 0/1, STATUS Running
+kubectl -n lab7 get endpoints site             # ENDPOINTS <none>
+kubectl -n lab7 describe pod -l app=site | grep -A3 'Readiness probe failed'
+kubectl -n lab7 patch deploy site --type=json -p '[{"op":"replace","path":"/spec/template/spec/containers/0/readinessProbe/httpGet/path","value":"/"}]'
+kubectl -n lab7 rollout status deploy/site
+kubectl -n lab7 get endpoints site             # agora com 2 IPs
+kubectl delete ns lab7
+```
+
+### Lab 8 — Job com dados do laboratório
+Cenário: rodar um processamento em lote sobre o `usuarios.csv` do `~/lab`, sem montar disco do host.
+
+```bash
+kubectl create ns lab8
+kubectl -n lab8 create configmap usuarios --from-file=$HOME/lab/dados/usuarios.csv
+cat <<'EOF' | kubectl -n lab8 apply -f -
+apiVersion: batch/v1
+kind: Job
+metadata: { name: conta-usuarios }
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: conta
+          image: busybox:1.36
+          command: ["sh", "-c", "tail -n +2 /dados/usuarios.csv | wc -l"]
+          volumeMounts: [{ name: d, mountPath: /dados }]
+      volumes:
+        - name: d
+          configMap: { name: usuarios }
+EOF
+kubectl -n lab8 wait --for=condition=complete job/conta-usuarios --timeout=60s
+kubectl -n lab8 logs job/conta-usuarios       # 8
+kubectl -n lab8 get job                        # COMPLETIONS 1/1
+kubectl delete ns lab8
+```
+
 ### Desafios
 
 - **Desafio 1:** o **TrilhaShop** em Kubernetes: Deployment da API, Service, Ingress, ConfigMap/Secret e StatefulSet (ou Deployment+PVC) do Postgres, com probes e requests/limits.
 - **Desafio 2:** RBAC: um usuário (ServiceAccount) que só **lê** Pods no namespace `dev`; prove com `can-i`.
 - **Desafio 3:** HPA com carga: gere tráfego (`hey`/`ab`) e observe o escalonamento de 2 para N réplicas.
 - **Desafio 4 (CKA):** em 15 minutos, crie um Deployment, escale, atualize e faça rollback **só com comandos `kubectl` imperativos**.
+- **Desafio 5:** crie um namespace `time-a` com `ResourceQuota` de no máximo 3 Pods e tente subir um Deployment de 5 réplicas; explique o que aconteceu e corrija.
+
+  **Verifique:** `kubectl -n time-a get pods --no-headers | wc -l` imprime `3` e `kubectl -n time-a describe rs | grep -i 'exceeded quota'` mostra a mensagem de quota excedida; depois do ajuste da quota (ou das réplicas), `kubectl -n time-a get deploy` mostra `READY` completo.
+
+- **Desafio 6:** gere um relatório de saúde do cluster num script: nós `Ready`, Pods fora de `Running`/`Completed` em todos os namespaces e Deployments com `READY` incompleto.
+
+  **Verifique:** `./saude.sh; echo $?` imprime a lista (vazia se tudo OK) e termina com `0`; ao deixar um Pod em `ImagePullBackOff`, o mesmo script lista esse Pod e termina com `1`.
 
 **Limpeza:** `kind delete cluster --name lab`.
 
@@ -372,6 +479,43 @@ Provoque, de propósito: `ImagePullBackOff`, `CrashLoopBackOff`, `Pending` (requ
 - Rodar tudo no namespace `default`.
 - Dar `cluster-admin` a todos por comodidade.
 - Editar recursos "ao vivo" (`kubectl edit`) em vez de pelo YAML versionado.
+- Mudar um ConfigMap e esperar que as variáveis de ambiente dos Pods mudem sozinhas (precisa de `rollout restart`).
+- Olhar só o STATUS `Running` e ignorar a coluna READY (`0/1` significa sem tráfego).
+- Esquecer o `-n` e mexer (ou procurar) no namespace errado; confira com `k config view --minify | grep namespace`.
+
+## Ponte com módulos anteriores
+
+| Vem de | Como reaparece aqui |
+|---|---|
+| Módulo 14 e 20 (containers) | O Pod é o container do módulo 20; o `limit` de memória é o cgroup do módulo 14 |
+| Módulo 17 (Nginx) | Ingress é o proxy reverso declarativo; o `nginx -t`/`reload` vira `rollout` |
+| Módulo 09 e 18 (redes) | Service = IP virtual com balanceamento; DNS interno `<svc>.<ns>.svc.cluster.local` |
+| Módulo 16 (troubleshooting) | O roteiro estado -> eventos -> logs -> configuração é o `get/describe/logs` |
+| Módulo 12 (logs) | `kubectl logs` e `get events` fazem o papel do `journalctl` |
+| Módulo 21 (IaC) | YAML versionado e `apply` declarativo; idempotência |
+
+### Lab integrador — Do container ao cluster, com diagnóstico guiado
+Reuse a imagem/stack do módulo 20, o roteiro do módulo 16 e o raciocínio de logs do módulo 12.
+
+```bash
+kubectl create ns integra
+kubectl -n integra create deployment api --image=nginx:1.27 --replicas=2
+kubectl -n integra expose deployment api --port=80
+kubectl -n integra rollout status deploy/api
+kubectl -n integra run tmp --rm -i --restart=Never --image=busybox:1.36 -- wget -qO- http://api | head -3
+# quebre de propósito: tag que não existe
+kubectl -n integra set image deploy/api nginx=nginx:9.99
+sleep 15
+kubectl -n integra get pods                                    # estado
+kubectl -n integra get events --sort-by=.lastTimestamp | tail -5   # eventos
+kubectl -n integra describe pod -l app=api | grep -iE 'Failed|BackOff' | head -3   # causa
+kubectl -n integra rollout undo deploy/api                     # correção
+kubectl -n integra rollout status deploy/api
+kubectl -n integra logs deploy/api --tail=3                    # logs do nginx, formato do módulo 17
+kubectl delete ns integra
+```
+
+Compare cada passo com o roteiro do módulo 16 (estado, eventos, logs, configuração): o método é o mesmo, só mudam os comandos.
 
 ## Conexão com os módulos seguintes
 

@@ -38,6 +38,8 @@ df -hT                     # espaço e tipo dos montados
 findmnt                    # árvore de montagens
 ```
 
+> `[TENTE VOCÊ]` Descubra o sistema de arquivos em que seu WSL vive. Rode `findmnt -no SOURCE,FSTYPE /` e `df -hT / /mnt/c | cut -c1-60`. Resposta: a raiz do Linux é `ext4` (um disco virtual `.vhdx` que o WSL monta), e `/mnt/c` aparece com outro tipo (`9p` ou `drvfs`), que é o disco do Windows acessado por rede interna. Raciocínio: isso explica por que "projetos ficam no `~`": os dois lados são sistemas de arquivos diferentes, com desempenho diferente.
+
 ## Tabela de partições: MBR x GPT
 
 | | **MBR** (antigo) | **GPT** (moderno) |
@@ -75,6 +77,10 @@ lsblk | grep loop
 
 > `[ATENÇÃO]` Todos os comandos destrutivos abaixo usam **o `/dev/loopN` que o `losetup` devolveu** (ex.: `/dev/loop20`). Jamais use `/dev/sda` ou outro dispositivo real do seu sistema. Confira com `lsblk` antes de cada `mkfs`/`fdisk`: formatar o dispositivo errado apaga os dados, sem volta.
 
+> `[TENTE VOCÊ]` Entenda por que o `dd` demora e o `truncate` não. Rode `cd ~/lab/discos && truncate -s 1G esparso.img && ls -lh esparso.img && du -h esparso.img; rm esparso.img`. Resposta: `ls` mostra `1.0G`, mas `du` mostra `0` — é um arquivo **esparso**: o tamanho "lógico" existe, mas nenhum bloco foi gravado. Raciocínio: o `dd if=/dev/zero` escreve zeros de verdade (lento, ocupa disco); o `truncate` só declara o tamanho, e o disco virtual funciona igual. Para laboratórios com imagens grandes, `truncate` é o caminho.
+
+> `[ATENÇÃO]` O comando `sudo losetup -D` do bloco de limpeza desfaz **todos** os loops do sistema — inclusive os que o `snap` usa para montar seus pacotes. Prefira desfazer apenas os seus: `losetup -a | grep lab/discos` para listar e `sudo losetup -d /dev/loopN` para cada um. Se já rodou o `-D` e algum snap falhar, `sudo systemctl restart snapd` ou `wsl --shutdown` resolvem.
+
 ### Particionar
 
 ```bash
@@ -103,6 +109,8 @@ sudo mkfs.ext4 -L DADOS ${LOOP}p1               # ext4 com rótulo
 sudo mkfs.xfs  -L LOGS  ${LOOP}p2               # xfs
 sudo blkid ${LOOP}p1 ${LOOP}p2
 ```
+
+> `[TENTE VOCÊ]` Olhe dentro do sistema de arquivos que você acabou de criar. Rode `sudo tune2fs -l ${LOOP}p1 | grep -E '^(Filesystem volume name|Block size|Reserved block count|Block count)'`. Resposta: o nome `DADOS`, `Block size: 4096` (ou 1024 em imagens pequenas) e um `Reserved block count` de cerca de **5%** do total. Raciocínio: por padrão o ext4 reserva 5% dos blocos para o root, de modo que um disco "cheio" de usuários ainda deixa o sistema respirar. É por isso que `df` mostra espaço livre menor do que o tamanho do disco menos os seus arquivos.
 
 ### Montar e desmontar
 
@@ -225,6 +233,8 @@ swapon --show
 sudo swapoff /swapfile
 ```
 
+> `[TENTE VOCÊ]` Leia a memória virtual sob três ângulos: `swapon --show`, `cat /proc/swaps` e `free -h | grep -i swap`. Resposta: os três mostram o mesmo recurso (tamanho, usado e prioridade) em formatos diferentes. Se o `swapon --show` vier vazio, não há swap ativo — normal em muitos servidores de nuvem e em WSL sem `swap=` no `.wslconfig`. Raciocínio: a fonte de verdade é `/proc/swaps`; os comandos são só apresentações dela (Módulo 13 volta a esse diretório).
+
 **Quotas** limitam o espaço por usuário/grupo (`quota`, `edquota`, `quotacheck`); exigem montar o FS com `usrquota`/`grpquota`. Conhecer o conceito e os comandos é suficiente para a prova.
 
 ## Laboratórios
@@ -241,11 +251,64 @@ Monte `vg_lab` com 2 PVs, crie um LV de 300 MB, grave dados e **cresça para 500
 ### Lab 4 — RAID 1
 Crie o RAID1 com duas imagens, grave um arquivo, **falhe** um disco, confirme que o arquivo continua legível e reconstrua.
 
+### Lab 5 — "No space left on device" com espaço livre
+Cenário: a aplicação falha ao criar arquivos e o `df -h` diz que há 90% livre. O que se esgotou foram os **inodes** (cada arquivo consome um).
+```bash
+cd ~/lab/discos
+truncate -s 20M pequeno.img
+mkfs.ext4 -F -q -N 100 pequeno.img                 # só ~100 inodes de propósito
+sudo mkdir -p /mnt/pequeno && sudo mount -o loop pequeno.img /mnt/pequeno
+sudo bash -c 'for i in $(seq 1 300); do touch /mnt/pequeno/f$i; done' 2>&1 | tail -1
+df -h /mnt/pequeno | tail -1
+df -i /mnt/pequeno | tail -1
+sudo ls /mnt/pequeno | wc -l
+```
+Esperado: o erro `No space left on device`; `df -h` com uso baixo (menos de 10%); `df -i` com `IUse%` em `100%`; e menos de 300 arquivos criados. Moral: "disco cheio" tem duas causas — blocos (`df -h`) e inodes (`df -i`). Limpeza: `sudo umount /mnt/pequeno; rm ~/lab/discos/pequeno.img`.
+
+### Lab 6 — Clonando e restaurando um disco
+Cenário: antes de uma mudança arriscada você clona o volume, guarda compactado e prova que a cópia é idêntica.
+```bash
+cd ~/lab/discos
+truncate -s 50M origem.img && mkfs.ext4 -F -q -L ORIGEM origem.img
+sudo mkdir -p /mnt/origem /mnt/copia
+sudo mount -o loop origem.img /mnt/origem
+echo "dados importantes" | sudo tee /mnt/origem/importante.txt
+sudo umount /mnt/origem
+
+gzip -k origem.img                                  # origem.img.gz (mantém o original)
+gunzip -c origem.img.gz > copia.img
+cmp origem.img copia.img && echo "imagens idênticas"
+sha256sum origem.img copia.img
+
+sudo mount -o loop copia.img /mnt/copia
+cat /mnt/copia/importante.txt
+blkid origem.img copia.img
+sudo umount /mnt/copia
+```
+Esperado: `imagens idênticas`, dois hashes iguais, o conteúdo `dados importantes` e **o mesmo UUID** nas duas imagens. Atenção: dois volumes com UUID igual montados juntos confundem o `fstab` por UUID (e o xfs recusa a segunda montagem sem `-o nouuid`); para um clone permanente, troque o UUID (`sudo tune2fs -U random copia.img`). Limpeza: `rm origem.img origem.img.gz copia.img`.
+
+### Lab 7 — Crescer um ext4 sem LVM
+Cenário: o volume da aplicação encheu e não há LVM. Em disco virtual, dá para ampliar o "disco" e depois o sistema de arquivos.
+```bash
+cd ~/lab/discos
+truncate -s 100M cresce.img && mkfs.ext4 -F -q cresce.img
+sudo mkdir -p /mnt/cresce && sudo mount -o loop cresce.img /mnt/cresce
+df -h /mnt/cresce | tail -1                         # ~100 MB
+sudo umount /mnt/cresce
+truncate -s 200M cresce.img                         # cresce o "disco"
+sudo e2fsck -f -y cresce.img
+sudo resize2fs cresce.img                           # cresce o sistema de arquivos
+sudo mount -o loop cresce.img /mnt/cresce
+df -h /mnt/cresce | tail -1                         # ~200 MB
+```
+Esperado: o tamanho no `df` passa de ~90 MB úteis para ~190 MB úteis, com os dados preservados. Esse é o mesmo raciocínio de "aumentar o disco no portal da nuvem e depois `growpart` + `resize2fs`" em uma VM. Limpeza: `sudo umount /mnt/cresce; rm cresce.img`.
+
 ### Desafios
 
 - **Desafio 1:** LV de 300 MB crescendo para 500 MB **sem desmontar**, depois adicionando um *terceiro* PV ao VG e crescendo mais.
 - **Desafio 2:** corrompa de propósito um ext4 numa imagem (`dd if=/dev/urandom of=img bs=1k seek=100 count=50 conv=notrunc`) e recupere com `fsck`.
 - **Desafio 3:** crie um swap file, ative-o, e explique a diferença entre swap em partição e em arquivo.
+- **Desafio 4:** monte uma imagem ext4 **automaticamente** pelo `fstab` usando a opção `loop`, sem passar por `losetup` manual. **Verifique:** depois de `sudo mount -a`, o comando `findmnt -no SOURCE,FSTYPE /mnt/x` imprime algo como `/dev/loop3 ext4` (o número do loop varia); lembre de remover a linha de teste do `fstab` ao final.
 
 **Limpeza (importante):**
 
@@ -266,6 +329,51 @@ rm -f ~/lab/discos/*.img
 - Esquecer de crescer o sistema de arquivos depois do `lvextend`.
 - Tratar RAID como backup.
 - Tentar `fsck` em sistema de arquivos montado.
+- Interpretar "disco cheio" só por blocos e esquecer os inodes (`df -i`).
+- Usar `sudo losetup -D` e desfazer também os loops dos pacotes snap; desfaça só os seus.
+- Clonar imagens de disco e montar original e cópia juntos sem lembrar que o UUID é o mesmo.
+
+## Ponte com módulos anteriores
+
+| Vem de | Como reaparece aqui |
+|---|---|
+| Módulo 03 (`find`, `du`, `ls -l`, hierarquia) | Achar o que ocupa espaço; montar em `/mnt` e entender a árvore única de diretórios |
+| Módulo 04 (`awk`, `sort`, `cut`) | Transformar a saída de `df` em alertas |
+| Módulo 05 (dono, grupo, setgid) | Um volume recém-montado é do root: é preciso `chown`/`chmod` para os usuários o usarem |
+| Módulo 06 (processos, `lsof`) | `target is busy`: descobrir qual processo segura o ponto de montagem |
+| Módulo 07 (pacotes) | `mkfs.*` vem do `e2fsprogs`/`xfsprogs`; LVM e RAID exigem `lvm2` e `mdadm` |
+
+### Lab integrador — Volume de dados com alerta de espaço
+Cenário: você entrega um volume de dados compartilhado para um time, com permissões corretas e um alerta que dispara quando o uso passa de 70%.
+1. (Módulos 07 e 08) Descubra de qual pacote vêm as ferramentas e prepare um volume de 20 MB:
+```bash
+dpkg -S '*/mkfs.ext4' | head -2
+cd ~/lab/discos && truncate -s 20M alerta.img && mkfs.ext4 -F -q -L TIME alerta.img
+sudo mkdir -p /mnt/alerta && sudo mount -o loop alerta.img /mnt/alerta
+ls -ld /mnt/alerta
+```
+Esperado: `e2fsprogs: /usr/sbin/mkfs.ext4` (ou `/sbin/...`) e o ponto de montagem pertencendo a `root root`.
+2. (Módulo 05) Entregue o volume ao seu usuário e ative o setgid para herdar o grupo:
+```bash
+sudo chown $USER:$USER /mnt/alerta && sudo chmod 2775 /mnt/alerta
+stat -c '%A %U:%G %n' /mnt/alerta
+```
+Esperado: `drwxrwsr-x seu_usuario:seu_usuario /mnt/alerta` (o `s` no grupo é o setgid).
+3. (Módulos 03 e 04) Encha o volume e crie o alerta:
+```bash
+fallocate -l 15M /mnt/alerta/enorme.bin
+df -P /mnt/alerta | awk 'NR>1 {gsub("%","",$5); if ($5 > 70) print "ALERTA:", $6, $5 "% usado"}'
+find /mnt/alerta -type f -size +1M -exec ls -lh {} \;
+```
+Esperado: `ALERTA: /mnt/alerta NN% usado` com NN acima de 70 e o `find` listando `enorme.bin`.
+4. (Módulo 06) Provoque e resolva o `target is busy`:
+```bash
+cd /mnt/alerta
+sudo umount /mnt/alerta                      # falha: target is busy
+fuser -vm /mnt/alerta                        # mostra o seu bash segurando o ponto
+cd ~ && sudo umount /mnt/alerta              # agora desmonta
+```
+5. Limpeza: `rm ~/lab/discos/alerta.img`.
 
 ## Conexão com os módulos seguintes
 

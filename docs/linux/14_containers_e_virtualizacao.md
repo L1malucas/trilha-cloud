@@ -60,6 +60,10 @@ exit
 hostname                                   # intacto fora
 ```
 
+> `[TENTE VOCÊ]` O seu shell e um processo isolado enxergam o mesmo namespace de PID? Raciocínio: cada namespace tem um número de identificação (inode) e dois processos no mesmo namespace mostram o mesmo número. Rode `readlink /proc/$$/ns/pid` e depois `sudo unshare --pid --fork --mount-proc readlink /proc/self/ns/pid`. Resposta: dois valores do tipo `pid:[4026531836]` com números **diferentes**; o segundo `readlink` já nasceu dentro de um namespace novo. Para ver o isolamento de outro ângulo: `sudo unshare --pid --fork --mount-proc ps -e` lista uma única linha, o próprio `ps` como PID 1.
+
+> `[ATENÇÃO]` Sem `--fork`, o `unshare --pid` costuma falhar com `Cannot allocate memory` ou `fork: Cannot allocate memory` no segundo comando: o processo que chama `unshare` não entra no namespace novo, só os seus **filhos** entram. Sem filho, não há PID 1 e o kernel recusa. O `--mount-proc` é o que faz o `ps` enxergar o `/proc` do namespace novo, e não o do host.
+
 ## cgroups: quanto o processo *pode usar*
 
 Os **cgroups** (control groups) limitam e contabilizam recursos (CPU, memória, I/O, nº de processos) por grupo de processos. Em sistemas modernos, o **cgroup v2** fica em `/sys/fs/cgroup`.
@@ -75,6 +79,8 @@ sudo systemd-run --scope -p MemoryMax=100M -p CPUQuota=20% bash -c 'yes > /dev/n
 ```
 
 Resumo: **namespaces limitam o que se vê; cgroups limitam o que se gasta.**
+
+> `[TENTE VOCÊ]` Dá para ver a qual cgroup um processo pertence e confirmar que o limite foi aplicado? Raciocínio: o `systemd-run --scope` cria uma unidade transitória e coloca o comando dentro dela; o caminho aparece em `/proc/self/cgroup`. Rode `sudo systemd-run --scope -p MemoryMax=100M cat /proc/self/cgroup`. Resposta: uma linha como `0::/system.slice/run-r1a2b3c.scope`, o nome da unidade criada na hora. Se o comando disser que não consegue conectar ao barramento, o systemd não está ativo na sua distro (revise o `/etc/wsl.conf` do Módulo 00).
 
 ## Um "container caseiro" sem Docker
 
@@ -118,6 +124,8 @@ docker images                                   # imagens locais
 
 > `[ATENÇÃO]` Entrar no grupo `docker` equivale a ter acesso **root** na máquina (um container pode montar `/`). Use com a mesma cautela do `sudo` e, em ambientes compartilhados, prefira **Podman rootless** (a seguir).
 
+> `[TENTE VOCÊ]` O hostname de dentro do container é o do seu WSL? Raciocínio: o container tem namespace `uts` próprio, então o hostname dele é independente, e o Docker usa o ID do container por padrão. Rode `docker run --rm alpine hostname` e compare com `hostname`. Resposta: um identificador hexadecimal de 12 caracteres (por exemplo `3f9c1a2b7d4e`), bem diferente do nome da sua máquina. Mesmo código de namespace do `unshare --uts` do início do módulo, só com embalagem.
+
 ### Provando que o container é um processo do host
 
 ```bash
@@ -128,6 +136,8 @@ sudo ls -l /proc/$(docker inspect -f '{{.State.Pid}}' teste)/ns     # seus names
 docker stats --no-stream               # uso (vem dos cgroups)
 docker rm -f teste
 ```
+
+> `[TENTE VOCÊ]` O limite que você pede ao Docker aparece mesmo no cgroup? Raciocínio: `--memory` é só uma tradução amigável; por baixo o Docker escreve o valor em `memory.max` do cgroup do container, e dentro do container o cgroup v2 é visível em `/sys/fs/cgroup`. Rode `docker run --rm --memory=64m alpine cat /sys/fs/cgroup/memory.max`. Resposta: `67108864` (64 x 1024 x 1024 bytes). Sem o `--memory`, o mesmo comando imprime `max`, que significa "sem limite".
 
 ## Podman: containers sem daemon e sem root
 
@@ -171,11 +181,50 @@ Monte o *rootfs* com `debootstrap`, entre com `unshare + chroot`, instale algo d
 ### Lab 4 — Docker
 Suba nginx na porta 8080, entre nele com `exec`, e mostre que o processo aparece no host com `ps` e em `/proc/<PID>/ns`.
 
+### Lab 5 — Anatomia de um limite de cgroup
+Cenário: o time de plataforma pergunta como o systemd limita um serviço. Você mostra o limite nascendo, no arquivo, e depois morrendo.
+```bash
+sudo -v                                                          # evita o prompt de senha em segundo plano
+sudo systemd-run --scope --unit=meulab -p MemoryMax=100M sleep 120 &
+sleep 1
+systemctl show meulab.scope -p MemoryMax                         # MemoryMax=104857600
+cat /sys/fs/cgroup/system.slice/meulab.scope/memory.max          # 104857600
+cat /sys/fs/cgroup/system.slice/meulab.scope/cgroup.procs        # o PID do sleep
+sudo systemctl stop meulab.scope                                 # a unidade e a pasta somem
+ls /sys/fs/cgroup/system.slice/meulab.scope 2>&1 | head -1       # No such file or directory
+```
+A moral: um limite de recurso é só um **valor num arquivo** de uma pasta que o kernel cria. Kubernetes `limits` e Docker `--memory` escrevem nesses mesmos arquivos.
+
+### Lab 6 — Rede isolada com network namespace
+Cenário: você precisa de uma "mini-rede" com dois hosts conversando, sem VM e sem Docker. É o bloco de construção dos desafios do Módulo 18.
+```bash
+sudo ip netns add azul
+sudo ip netns exec azul ip a                                     # só o loopback, desligado
+sudo ip link add veth-host type veth peer name veth-azul         # um "cabo virtual" com duas pontas
+sudo ip link set veth-azul netns azul                            # joga uma ponta dentro do namespace
+sudo ip addr add 10.99.0.1/24 dev veth-host && sudo ip link set veth-host up
+sudo ip netns exec azul ip addr add 10.99.0.2/24 dev veth-azul
+sudo ip netns exec azul ip link set veth-azul up
+sudo ip netns exec azul ip link set lo up
+ping -c 2 10.99.0.2                                              # host -> namespace
+sudo ip netns exec azul ping -c 2 10.99.0.1                      # namespace -> host
+```
+Não remova o namespace ainda: o laboratório integrador mais abaixo reaproveita o `azul`.
+> `[WSL]` `ip netns` e `veth` funcionam no kernel do WSL2 (é o que o Docker usa). Se `ip link add ... type veth` reclamar de operação não suportada, o seu kernel não tem o módulo; atualize o WSL com `wsl --update`.
+
+### Lab 7 — Imagem imutável, dados externos
+Cenário: você quer processar o `access.log` do laboratório dentro de um container sem copiá-lo para a imagem e sem dar poder de escrita ao container.
+```bash
+docker run --rm -v ~/lab/dados:/dados:ro alpine sh -c 'wc -l /dados/access.log; touch /dados/x'
+```
+Resposta esperada: `5000 /dados/access.log` e depois `touch: /dados/x: Read-only file system`. O `:ro` é um *bind mount* somente leitura (namespace `mnt` + montagem do Módulo 08): a imagem fica intacta e os dados ficam no host.
+
 ### Desafios
 
 - **Desafio 1:** container caseiro com **limite de memória** via cgroup (use `systemd-run -p MemoryMax=...` envolvendo o `unshare+chroot`).
 - **Desafio 2:** explique, por escrito, por que um container "vaza" menos isolamento que uma VM e cite uma situação em que ainda assim prefere containers.
 - **Desafio 3:** repita o `docker run nginx` com `podman` rootless e compare o dono do processo (`ps -o user,pid,cmd`).
+- **Desafio 4:** suba um container Alpine com **três** limites ao mesmo tempo (memória 64 MB, 20 processos, meio núcleo de CPU) e prove os três valores lendo os arquivos do cgroup de dentro dele, sem usar `docker inspect`. **Verifique:** `docker run --rm --memory=64m --pids-limit=20 --cpus=0.5 alpine sh -c 'cat /sys/fs/cgroup/memory.max /sys/fs/cgroup/pids.max /sys/fs/cgroup/cpu.max'` deve imprimir `67108864`, `20` e `50000 100000` (o último é "cota de 50 ms a cada período de 100 ms").
 
 ## Erros comuns nesta fase
 
@@ -184,6 +233,36 @@ Suba nginx na porta 8080, entre nele com `exec`, e mostre que o processo aparece
 - Rodar containers como root e com `--privileged` por comodidade.
 - Esquecer o `--rm` e acumular containers parados.
 - Confundir **imagem** (molde) com **container** (instância).
+- Esquecer o `--fork` no `unshare --pid` e achar que o PID namespace "não funciona".
+- Medir limite de memória só pelo `docker stats` e nunca conferir o `memory.max` no cgroup (o limite pode nem ter sido aplicado).
+- Deixar `ip netns` e interfaces `veth` esquecidos no laboratório: limpe com `ip netns del` antes de seguir.
+
+## Ponte com módulos anteriores
+
+| Vem de | Como reaparece aqui |
+|---|---|
+| Módulo 05 — usuários e permissões | Entrar no grupo `docker` = root; `User=` e *user namespace* decidem quem é "root" dentro |
+| Módulo 06 — processos e systemd | Container = processo; `systemd-run` cria cgroups; `kill`/`ps` valem igual |
+| Módulo 08 — `mount`, loop, fstab | O *rootfs* do container é montado; volumes são *bind mounts* (`-v ...:ro`) |
+| Módulo 09 — `ip`, `ss`, portas | `ip netns`, `veth` e `-p 8080:80` são o mesmo vocabulário de rede |
+| Módulo 12 — `journalctl` | Serviço transitório do `systemd-run` loga no journal; `docker logs` é o equivalente |
+| Módulo 13 — `/proc`, `/sys`, `sysctl` | `/proc/<PID>/ns` e `/sys/fs/cgroup` são onde namespaces e cgroups "moram" |
+
+### Lab 8 — Serviço contido: rede própria + limite + log (integrador)
+Cenário: rodar um servidor web numa rede isolada, com teto de memória e log no journal, **sem Docker**: tudo com o que você já aprendeu. Reaproveita o namespace `azul` do Lab 6 (se já removeu, repita os passos dele).
+```bash
+echo "ola de dentro do netns" > ~/lab/dados/oi.txt
+sudo systemd-run --unit=websrv -p MemoryMax=50M -p NetworkNamespacePath=/run/netns/azul \
+  python3 -m http.server 8000 --directory "$HOME/lab/dados"
+sleep 1
+curl -s http://10.99.0.2:8000/oi.txt                             # responde pelo IP do namespace
+ss -tlnp | grep 8000 || echo "host: nada escutando na 8000"      # o host NÃO vê a porta
+sudo ip netns exec azul ss -tlnp | grep 8000                     # o namespace vê
+systemctl show websrv -p MemoryMax                               # MemoryMax=52428800
+journalctl -u websrv --no-pager | tail -3                        # o GET do curl, via journal
+sudo systemctl stop websrv && sudo ip netns del azul             # limpeza
+```
+Aqui estão juntos: namespace de rede (14), `ip`/`ss` (09), cgroup via systemd (06/14) e `journalctl` (12). É, em miniatura, o que Docker e Kubernetes fazem por você.
 
 ## Conexão com os módulos seguintes
 

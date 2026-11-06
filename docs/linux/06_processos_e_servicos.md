@@ -39,6 +39,8 @@ uptime                     # load average (1, 5, 15 min)
 
 > `[TEORIA]` O **load average** é o número médio de processos *querendo* CPU. Em uma máquina de 4 núcleos, load 4.0 é "cheio"; 8.0 indica fila. Compare sempre com `nproc`.
 
+> `[TENTE VOCÊ]` Seu WSL está sob pressão? Rode `uptime; nproc`. Resposta: se `uptime` mostra `load average: 0.15, 0.10, 0.05` e `nproc` mostra `4`, o sistema está folgado (0,15 de 4 núcleos). Raciocínio: você nunca lê o load sozinho; divide pelo número de núcleos. Load 4 em 4 núcleos é "cheio"; load 4 em 16 núcleos é tranquilo.
+
 ## Sinais: conversar com processos
 
 Um **sinal** é uma notificação ao processo. O processo pode tratá-lo ou, em alguns casos, o kernel decide por ele.
@@ -63,6 +65,10 @@ killall sleep              # por nome exato
 
 > `[ATENÇÃO]` Comece sempre por `kill` (SIGTERM) e só use `-9` se o processo não reagir: o `SIGKILL` não deixa o programa fechar arquivos nem liberar recursos, podendo corromper dados.
 
+> `[TENTE VOCÊ]` Pause e retome um processo sem matá-lo. Rode `sleep 300 & kill -STOP $!; ps -o pid,stat,cmd -p $!` e depois `kill -CONT $!; ps -o pid,stat,cmd -p $!; kill $!`. Resposta: no primeiro `ps` o STAT é `T` (parado); no segundo volta a `S` (dormindo). Raciocínio: `$!` guarda o PID do último job em segundo plano, então você não precisa copiar número nenhum. `STOP`/`CONT` são o "pause/play" do processo — o programa nem fica sabendo.
+
+> `[TENTE VOCÊ]` Fabrique um zumbi e veja o estado `Z`. Rode `python3 -c 'import os,time; os.fork() or os._exit(0); time.sleep(60)' & sleep 1; ps -o pid,ppid,stat,cmd --ppid $!` e depois `kill $!`. Resposta: aparece uma linha com STAT `Z` e o comando `[python3] <defunct>`. Raciocínio: o filho terminou na hora (`_exit(0)`), mas o pai está dormindo e não chamou `wait()` para coletar o resultado; o kernel mantém a "certidão de óbito" na tabela de processos. Ao matar o pai, o systemd (PID 1) adota o zumbi e o limpa.
+
 ## Prioridade: nice e renice
 
 O valor **nice** vai de -20 (mais prioridade) a 19 (menos). Usuário comum só pode *aumentar* o nice (ser "mais gentil"); aumentar a prioridade exige root.
@@ -72,6 +78,8 @@ nice -n 10 comando_pesado          # inicia com baixa prioridade
 renice -n 5 -p <PID>               # altera um processo existente
 ps -o pid,ni,cmd -p <PID>
 ```
+
+> `[ATENÇÃO]` Usuário comum só aumenta o nice. Teste: `sleep 200 & renice -n 5 -p $!` funciona; depois `renice -n -5 -p $!` falha com `Permission denied`. Para baixar o nice você precisa de `sudo`. Repare que, uma vez aumentado, você não consegue "voltar atrás" sem root — é de propósito, para um usuário não furar fila.
 
 ## Jobs: primeiro e segundo plano
 
@@ -192,6 +200,8 @@ journalctl -b -1                      # boot anterior
 journalctl --disk-usage
 ```
 
+> `[TENTE VOCÊ]` Leia os logs do boot atual sem se afogar. Rode `journalctl -b -p warning -n 5 --no-pager` e depois `journalctl -u ola -o cat -n 3 --no-pager` (se o `ola` já existir). Resposta: o primeiro mostra até 5 avisos/erros desde o boot (`-p warning` inclui `err` e acima); o segundo mostra só o texto da mensagem, sem data e host (`-o cat`). Raciocínio: filtre primeiro por prioridade (`-p`), depois por unit (`-u`), e só então por tempo (`--since`). Dessa forma você chega na linha certa em segundos.
+
 ## Boot: o caminho do botão ao login
 
 1. **Firmware (BIOS/UEFI)** testa o hardware e acha o disco de boot.
@@ -218,11 +228,61 @@ journalctl --disk-usage
 2. Faça `sudo kill -9 $(systemctl show -p MainPID --value ola)` e confirme que ele **reinicia sozinho** (`Restart=on-failure`).
 3. Mude o `RestartSec`, rode `daemon-reload` e `restart`.
 
+### Lab 4 — Limpando um serviço que ignora o SIGTERM
+Cenário: um worker de fila precisa terminar a mensagem atual antes de sair. Se o systemd mata na marra, a mensagem se perde.
+1. Crie o script e a unit:
+```bash
+mkdir -p ~/lab/servico && cat > ~/lab/servico/worker.sh <<'SH'
+#!/usr/bin/env bash
+trap 'echo "recebi SIGTERM, terminando a mensagem atual"; sleep 2; echo "encerrado limpo"; exit 0' TERM
+echo "worker iniciado, PID $$"
+while true; do sleep 1; done
+SH
+chmod +x ~/lab/servico/worker.sh
+sudo tee /etc/systemd/system/worker.service >/dev/null <<EOF
+[Unit]
+Description=Worker com encerramento limpo
+
+[Service]
+ExecStart=$HOME/lab/servico/worker.sh
+User=$USER
+TimeoutStopSec=10
+EOF
+sudo systemctl daemon-reload && sudo systemctl start worker
+```
+2. Pare e leia o log: `sudo systemctl stop worker; journalctl -u worker -o cat -n 5 --no-pager`. Você deve ver as linhas "recebi SIGTERM" e "encerrado limpo".
+3. Remova o `trap` (comente a linha), reinicie e pare de novo: o encerramento é imediato e sem mensagens. Moral: o `systemctl stop` envia `SIGTERM`; quem trata o sinal é o seu programa.
+4. Limpeza: `sudo rm /etc/systemd/system/worker.service; sudo systemctl daemon-reload`.
+
+### Lab 5 — Ajustando um serviço sem editar o original (drop-in)
+Cenário: a unit vem de um pacote e você não deve editá-la (o upgrade sobrescreve). A solução profissional é um *drop-in*.
+1. Com o `ola.service` do Lab 3 ativo, crie o ajuste:
+```bash
+sudo mkdir -p /etc/systemd/system/ola.service.d
+sudo tee /etc/systemd/system/ola.service.d/override.conf >/dev/null <<'EOF'
+[Service]
+Restart=always
+RestartSec=1
+Environment=AMBIENTE=homolog
+EOF
+sudo systemctl daemon-reload && sudo systemctl restart ola
+```
+2. Confira o que o systemd enxerga: `systemctl cat ola` (mostra o arquivo original e o drop-in) e `systemctl show ola -p Restart -p RestartUSec`. Esperado: `Restart=always` e `RestartUSec=1s`.
+3. Remova o diretório `ola.service.d`, rode `daemon-reload` e `restart`, e confirme que voltou para `on-failure`.
+
+### Lab 6 — Processo transitório com systemd-run
+Cenário: você precisa rodar uma tarefa pesada uma única vez, com baixa prioridade e visível como serviço, sem criar arquivo de unit.
+1. `sudo systemd-run --unit=tarefa-lab --nice=10 sleep 300`
+2. `systemctl status tarefa-lab --no-pager | head -8` e `ps -o pid,ni,cmd -C sleep`. O nice deve ser 10.
+3. `sudo systemctl stop tarefa-lab` e confirme com `systemctl is-active tarefa-lab` (retorna `inactive`).
+
 ### Desafios
 
 - **Desafio 1:** crie um serviço que escreve a data no `/tmp/hb.log` a cada 10 s, reinicia ao falhar e sobe no boot. Prove cada propriedade.
 - **Desafio 2:** descubra, usando `systemctl list-dependencies` e `systemd-analyze blame`, os 5 serviços mais lentos do boot.
 - **Desafio 3:** explique a diferença entre um processo zumbi e um processo órfão e como gerar um zumbi em laboratório.
+
+- **Desafio 4:** crie um serviço que roda como `User=nobody`, não consegue escrever em `/etc` e mesmo assim reinicia automaticamente quando morto com `kill -9`. Prove as duas coisas. **Verifique:** `systemctl show -p User -p Restart <unit>` deve mostrar `User=nobody` e `Restart=on-failure`; `sudo systemctl kill -s KILL <unit>; sleep 4; systemctl is-active <unit>` deve imprimir `active`.
 
 **Limpeza:** `sudo systemctl disable --now ola; sudo rm /etc/systemd/system/ola.service; sudo systemctl daemon-reload`.
 
@@ -233,6 +293,60 @@ journalctl --disk-usage
 - Esquecer o `daemon-reload` após editar uma unit.
 - Perder trabalho por não usar `tmux`/`nohup` em sessões SSH.
 - Confundir load average com porcentagem de CPU.
+- Achar que `systemctl stop` mata "à força": ele manda `SIGTERM` e só depois do `TimeoutStopSec` usa `SIGKILL`; um programa sem `trap` simplesmente morre sem limpar nada.
+- Rodar o serviço como root "para funcionar" em vez de criar um usuário dedicado e ajustar permissões/`StateDirectory`.
+- Editar direto uma unit em `/usr/lib/systemd/system/`: o próximo upgrade do pacote desfaz. Use drop-in (`systemctl edit` ou `.d/override.conf`).
+
+## Ponte com módulos anteriores
+
+| Vem de | Como reaparece aqui |
+|---|---|
+| Módulo 02 (pipes, redirecionamento, `$!`) | `ps ... | awk`, `kill $!`, `nohup ... > saida.log 2>&1 &` e `journalctl | grep` |
+| Módulo 03 (arquivos e caminhos) | `ExecStart` precisa de caminho absoluto; a unit vive em `/etc/systemd/system/` |
+| Módulo 04 (`grep`, `awk`, `sort`, `uniq`) | Contar e agrupar linhas do `journalctl -o cat` |
+| Módulo 05 (usuários, `chmod`, `sudo`) | `User=` da unit, permissões do script e do diretório de estado |
+
+### Lab integrador — Serviço com usuário dedicado, permissões e análise de log
+Cenário: você vai publicar um coletor de métricas que não pode rodar como seu usuário nem como root.
+1. (Módulo 05) Crie um usuário de sistema sem login: `sudo useradd --system --no-create-home --shell /usr/sbin/nologin coletor`.
+2. Instale o script em local acessível a ele (a sua `~` costuma ser `750` no Ubuntu 24.04, então ele não leria `~/lab`):
+```bash
+cat > ~/lab/servico/coletor.sh <<'SH'
+#!/usr/bin/env bash
+i=0
+while true; do
+  i=$((i+1))
+  nivel=INFO; [ $((i % 4)) -eq 0 ] && nivel=WARN
+  echo "$nivel coleta numero $i carga=$(cut -d' ' -f1 /proc/loadavg)"
+  echo "$nivel $i" >> /var/lib/coletor/saida.txt
+  sleep 1
+done
+SH
+sudo install -m 0755 ~/lab/servico/coletor.sh /usr/local/bin/coletor.sh
+```
+3. (Módulo 06) Crie a unit com diretório de estado gerenciado pelo systemd:
+```bash
+sudo tee /etc/systemd/system/coletor.service >/dev/null <<'EOF'
+[Unit]
+Description=Coletor de metricas do laboratorio
+
+[Service]
+ExecStart=/usr/local/bin/coletor.sh
+User=coletor
+StateDirectory=coletor
+Restart=on-failure
+EOF
+sudo systemctl daemon-reload && sudo systemctl enable --now coletor
+```
+4. (Módulos 04 e 05) Depois de uns 15 segundos, verifique dono e conteúdo e analise o log:
+```bash
+ls -ld /var/lib/coletor                                  # dono: coletor
+ps -o user,pid,cmd -C coletor.sh                         # roda como coletor, não como você
+journalctl -u coletor -o cat --no-pager | awk '{c[$1]++} END{for(k in c) print k, c[k]}'
+sudo cat /var/lib/coletor/saida.txt | grep -c WARN
+```
+Esperado: o `awk` imprime algo como `INFO 11` e `WARN 4`; o `grep -c` bate com o WARN. Se o `StateDirectory=coletor` não existisse, o `echo >>` falharia com `Permission denied` e o `journalctl` mostraria o erro: é o Módulo 05 aparecendo dentro do Módulo 06.
+5. Limpeza: `sudo systemctl disable --now coletor; sudo rm /etc/systemd/system/coletor.service /usr/local/bin/coletor.sh; sudo systemctl daemon-reload; sudo userdel coletor`.
 
 ## Conexão com os módulos seguintes
 

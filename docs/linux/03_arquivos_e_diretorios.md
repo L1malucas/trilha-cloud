@@ -33,6 +33,8 @@ file ~/lab/dados/access.log     # tipo do conteúdo (texto, binário, imagem...)
 
 Tipos de arquivo (primeiro caractere de `ls -l`): `-` regular, `d` diretório, `l` link simbólico, `b`/`c` dispositivo de bloco/caractere, `s` socket, `p` pipe nomeado.
 
+> `[TENTE VOCÊ]` Prove que o nome não é o arquivo: `cd ~/lab && echo oi > a.txt && ls -i a.txt && mv a.txt b.txt && ls -i b.txt && cp b.txt c.txt && ls -i c.txt`. Resposta: o número do inode do `a.txt` e do `b.txt` é **o mesmo** (o `mv` só trocou o nome na entrada do diretório, não tocou nos dados), e o `c.txt` ganha um inode **novo** (o `cp` criou outra ficha e copiou os blocos). É por isso que `mv` é instantâneo mesmo com um arquivo de 10 GB na mesma partição. Limpe com `rm b.txt c.txt`.
+
 ## Criar, copiar, mover e apagar
 
 ```bash
@@ -90,6 +92,8 @@ echo *.txt                     # veja o que o shell expande (ele, não o echo)
 
 > `[TENTE VOCÊ]` O que `rm *.log` apaga e o que `rm "*.log"` apaga? Resposta: o primeiro apaga todos os `.log`; o segundo tenta apagar um arquivo chamado literalmente `*.log` (aspas desligam o curinga).
 
+> `[TENTE VOCÊ]` Veja o que acontece quando o curinga não casa com nada: `mkdir -p /tmp/g && cd /tmp/g && touch a1 a2 b1 && echo a? && echo [ab]1 && echo *3`. Resposta: `a1 a2`, depois `a1 b1`, e por fim o texto literal `*3`. Raciocínio: o `echo` não sabe de curingas, quem expande é o shell; e quando **nada** casa, o bash deixa o padrão como está. Cuidado com isso em scripts: `rm *3` tentaria apagar um arquivo chamado literalmente `*3`. Depois, `cd ~ && rm -r /tmp/g`.
+
 ## find: o localizador poderoso
 
 `find` **percorre a árvore em tempo real** procurando por critérios. Sintaxe: `find <onde> <critérios> <ação>`.
@@ -122,6 +126,8 @@ locate access.log
 
 > `[ATENÇÃO]` Rode `find ... -delete` **sem** o `-delete` primeiro: confira a lista, depois repita com a ação. E a ordem importa: `-delete` antes dos filtros pode apagar tudo.
 
+> `[TENTE VOCÊ]` Quantos arquivos regulares existem em `~/lab/dados`? Rode `find ~/lab/dados -type f | wc -l`. Resposta: `3` (`access.log`, `app.log` e `usuarios.csv`) se você só rodou o `gera-lab.sh`; vai aparecer um a mais depois do `sed -i.bak` do Módulo 04. Note a rotina: primeiro **contar/listar** com o `find` puro, e só depois pensar em `-delete` ou `-exec`.
+
 ## Links: dois nomes, um arquivo
 
 - **Link físico (hard link)**: **outro nome para o mesmo inode**. Os dois nomes são iguais; apagar um não afeta o outro. Só vale dentro do mesmo sistema de arquivos e não para diretórios.
@@ -140,6 +146,8 @@ readlink -f simbolico.txt             # para onde aponta
 
 ![Saída de `ls -li` mostrando o mesmo número de inode para original.txt e fisico.txt e o símbolo -> no link simbólico](screenshots/03-arquivos-e-diretorios/01-links-inodes.png)
 > `[PRINT]` Passo a passo para capturar: executar o bloco acima até o `ls -li` (antes do `rm`). Capturar as três linhas.
+
+> `[TENTE VOCÊ]` Quanto pesa um symlink? Rode `ln -s /etc/hostname /tmp/h && ls -l /tmp/h && stat -c %s /tmp/h`. Resposta: o `ls` mostra `/tmp/h -> /etc/hostname` e o `stat` imprime `13`, que é exatamente o número de caracteres de `/etc/hostname`. Um symlink não guarda o conteúdo do alvo — só o **texto do caminho**. Por isso ele "quebra" quando o alvo some. Limpe com `rm /tmp/h`.
 
 ## Espaço em disco
 
@@ -167,6 +175,8 @@ zip -r bkp.zip ~/lab/dados && unzip -l bkp.zip
 
 > `[TEORIA]` Memorize a mnemônica do tar: **c**reate, **x**tract, **t**est/list, **z** gzip, **f** file (sempre por último, pois recebe o nome). Para a prova, `tar czf`, `tar xzf` e `tar tzf` são os três clássicos.
 
+> `[ATENÇÃO]` Ao rodar `tar -czf x.tar.gz ~/lab/dados`, o GNU tar avisa `Removing leading '/' from member names`. Ele tira a barra inicial de propósito: assim o restore não sobrescreve caminhos absolutos por acidente. Consequência: o conteúdo é extraído **relativo** ao diretório atual (ou ao `-C`). Para um backup limpo, entre na pasta pai com `-C`: `tar -czf x.tar.gz -C ~/lab dados` gera membros `dados/...` em vez de `home/usuario/lab/dados/...`.
+
 ## Laboratórios
 
 ### Lab 1 — Estrutura e limpeza
@@ -184,11 +194,63 @@ zip -r bkp.zip ~/lab/dados && unzip -l bkp.zip
 2. Gere `backup-AAAAMMDD.tar.gz` usando `$(date +%Y%m%d)` no nome.
 3. Extraia em `/tmp/teste` e verifique com `diff -r`.
 
+### Lab 4 — Retenção de logs antigos
+
+Cenário: a pasta de logs de uma aplicação cresce todo dia e a política é guardar só 7 dias. Simule o cenário com datas falsas e aplique a rotina segura (listar, depois apagar):
+
+```bash
+mkdir -p ~/lab/logs-app && cd ~/lab/logs-app
+touch -d '10 days ago' app-velho1.log app-velho2.log
+touch -d '3 days ago' app-recente.log
+touch app-hoje.log
+ls -l --time-style=long-iso
+find . -name '*.log' -mtime +7 -print         # só LISTA: confira a lista
+find . -name '*.log' -mtime +7 -delete        # agora apaga
+ls
+```
+
+Esperado: antes do `-delete`, só `app-velho1.log` e `app-velho2.log` aparecem; depois, sobram `app-recente.log` e `app-hoje.log`. O `-mtime +7` significa "modificado há **mais** de 7 dias".
+
+### Lab 5 — Deploy com symlink e rollback
+
+Cenário: você publica versões de um site em pastas separadas e uma pasta `current` aponta para a versão no ar. Trocar o symlink é a forma clássica de fazer deploy e rollback quase instantâneos:
+
+```bash
+mkdir -p ~/lab/deploy/releases/{v1,v2}
+echo "versão 1" > ~/lab/deploy/releases/v1/index.html
+echo "versão 2" > ~/lab/deploy/releases/v2/index.html
+cd ~/lab/deploy
+ln -sfn releases/v1 current && cat current/index.html     # versão 1
+ln -sfn releases/v2 current && cat current/index.html     # deploy: versão 2
+ln -sfn releases/v1 current && cat current/index.html     # rollback: versão 1
+ls -l current
+```
+
+O `-f` substitui o link existente e o `-n` trata `current` como o próprio link (sem ele, o `ln` criaria o novo link **dentro** da pasta alvo). As versões antigas continuam intactas, então o rollback é só reapontar.
+
+### Lab 6 — Disco cheio: bytes ou inodes?
+
+Cenário: o monitoramento diz "disco cheio" mas `df -h` mostra espaço sobrando. Investigue as duas hipóteses:
+
+```bash
+df -h /                                       # espaço em bytes
+df -i /                                       # inodes (anote o IUsed)
+mkdir ~/lab/muitos && cd ~/lab/muitos && touch f{1..2000}
+df -i . | tail -1                             # IUsed subiu cerca de 2000
+ls | wc -l                                    # 2000
+cd ~ && rm -r ~/lab/muitos
+du -h --max-depth=1 /var 2>/dev/null | sort -h | tail -5     # quem ocupa mais em /var
+```
+
+Raciocínio: arquivos vazios gastam quase zero bytes, mas cada um consome um **inode**. Milhões de arquivos minúsculos (cache, sessões) podem esgotar os inodes com o disco "vazio" — por isso o diagnóstico sempre olha `df -h` **e** `df -i`.
+
 ### Desafios
 
 - **Desafio 1:** um comando que apaga arquivos `.log` com mais de 7 dias em uma pasta, mas primeiro só **mostra** quais seriam apagados.
 - **Desafio 2:** script de backup `bkp.sh` que faz `tar.gz` de uma pasta com data no nome e mantém só os 3 backups mais recentes.
 - **Desafio 3:** encontre, no seu `$HOME`, os 10 maiores arquivos e quanto cada um ocupa (`du`, `sort -h`, `head`).
+- **Desafio 4:** em `~/lab/hl`, crie `dados.txt` com uma linha, depois dois hard links (`l1` e `l2`) para ele. Apague o `dados.txt` original e mostre que o conteúdo sobrevive e que o contador de links do arquivo caiu para 2.
+  **Verifique:** `stat -c '%h' ~/lab/hl/l1 && cat ~/lab/hl/l2` deve imprimir `2` e depois a linha que você escreveu.
 
 ## Erros comuns nesta fase
 
@@ -198,6 +260,35 @@ zip -r bkp.zip ~/lab/dados && unzip -l bkp.zip
 - Rodar `find -delete` sem testar antes.
 - Esquecer `-C` ao extrair e "poluir" o diretório atual.
 - Não perceber que o shell expande `*` antes do comando.
+- Achar que o disco está cheio só olhando `df -h`, sem checar `df -i`.
+- Usar `ln -sf` sem `-n` ao trocar um symlink que aponta para diretório (o novo link nasce dentro do alvo).
+- Fazer `tar` com caminho absoluto e depois extrair "no lugar errado" por não usar `-C`.
+
+## Ponte com módulos anteriores
+
+| Vem de | Como reaparece aqui |
+|---|---|
+| Módulo 00 — `~/lab/dados` e Git em `~/lab` | São os arquivos que você copia, compacta e mede; o `.gitignore` evita versionar backups |
+| Módulo 00 — `/mnt/c` x `~` | `du` e `df` deixam claro que `/mnt/c` é outro sistema de arquivos |
+| Módulo 01 — FHS e "tudo é arquivo" | `find /etc`, `du /var` e os links `/bin -> usr/bin` ganham sentido |
+| Módulo 02 — redirecionamento, pipes, `$(date)` | Montam o nome do backup e capturam os erros do `tar` |
+| Módulo 02 — variáveis e aspas | Protegem caminhos com `"$DEST"` ao montar o comando |
+
+### Lab integrador — Backup datado dos dados do lab
+
+Use variável e `$(date)` (02), redirecionamento de stderr (02), `tar` (03), `find`/`ls` (03) e a estrutura do 00:
+
+```bash
+export DEST=~/lab/backups
+mkdir -p "$DEST"
+tar -czf "$DEST/dados-$(date +%Y%m%d-%H%M%S).tar.gz" -C ~/lab dados 2>> "$DEST/erros.log"
+ls -lh "$DEST"
+tar -tzf "$(ls -t "$DEST"/dados-*.tar.gz | head -1)" | head -5      # confere o conteúdo sem extrair
+[ -s "$DEST/erros.log" ] && cat "$DEST/erros.log" || echo "sem erros no backup"
+echo 'backups/' >> ~/lab/.gitignore
+```
+
+Esperado: um arquivo `dados-AAAAMMDD-HHMMSS.tar.gz` de poucos KB, membros começando com `dados/`, e a mensagem `sem erros no backup`. Rode duas vezes: o `ls -t ... | head -1` sempre escolhe o mais novo.
 
 ## Conexão com os módulos seguintes
 

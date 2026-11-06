@@ -43,6 +43,10 @@ O **Active Directory Domain Services** é o **serviço de diretório** da Micros
 
 Ordem de aplicação (**LSDOU**): *Local → Site → Domain → OU* (a mais próxima do objeto vence, salvo imposição). Diagnóstico: `gpresult /r` e `gpupdate /force` num cliente.
 
+> `[TENTE VOCÊ]` Uma GPO no domínio bloqueia o painel de controle, e outra na OU "TI" libera. A pessoa da OU "TI" consegue abrir? Resposta: sim. Pela ordem LSDOU, a GPO da **OU** é aplicada por último e vence a do domínio, salvo se a do domínio estiver marcada como *Enforced*. Para conferir no cliente, `gpresult /r` lista as GPOs aplicadas e as negadas, em ordem.
+
+> `[ATENÇÃO]` Uma GPO só vale para objetos **dentro** da OU em que está vinculada. Criar a GPO e não vinculá-la (ou colocar o computador numa OU diferente do usuário) é o erro nº 1 de "a política não pegou". Lembre: política de **computador** segue o objeto computador; política de **usuário** segue o objeto usuário.
+
 ## PowerShell: o shell orientado a objetos
 
 Enquanto o bash passa **texto** por pipes, o **PowerShell** passa **objetos** (com propriedades e métodos), e seus comandos seguem o padrão **Verbo-Substantivo** (`Get-Process`, `Stop-Service`). É multiplataforma (**`pwsh`** roda no Linux) e é a base do `Az` (Azure) e da automação do Windows Server.
@@ -68,6 +72,10 @@ Comparação direta com o que você já sabe:
 | Ajuda | `man ls` | `Get-Help Get-ChildItem` |
 
 Instalar `pwsh` no Ubuntu (WSL): siga https://learn.microsoft.com/powershell/scripting/install/install-ubuntu e rode `pwsh`.
+
+> `[TENTE VOCÊ]` Sem instalar nada no WSL, dá para testar um comando PowerShell? Resposta: sim, por container: `docker run --rm mcr.microsoft.com/powershell pwsh -NoProfile -Command 'Get-Date; $PSVersionTable.PSVersion'`. Útil para experimentar a sintaxe e o pipeline de objetos em qualquer máquina com Docker.
+
+> `[TENTE VOCÊ]` Como ver que o PowerShell passa objetos e não texto? Resposta: `Get-Process | Get-Member` lista as propriedades e métodos de cada objeto (`CPU`, `Id`, `Kill()`...). No bash o `ps` só devolve linhas de texto, que você precisa fatiar com `awk`; aqui você pede a propriedade pelo nome (`Sort-Object CPU`).
 
 > `[TENTE VOCÊ]` Mostre os 3 serviços em execução com o nome mais longo. Resposta: `Get-Service | Where Status -eq Running | Sort-Object {$_.Name.Length} -Descending | Select -First 3 Name`.
 
@@ -126,6 +134,10 @@ multipass delete vm1 --purge
 
 Útil para o que o WSL não cobre: **boot, GRUB e `rescue.target`** (Módulo 16), `kvm` real e `/etc/fstab` de verdade.
 
+> `[TENTE VOCÊ]` Seu Linux está dentro de uma VM, de um container ou direto no hardware? Resposta: `systemd-detect-virt` imprime o tipo (`wsl`, `kvm`, `microsoft`, `docker`...) ou `none` em máquina física. É o primeiro comando para saber "em cima do quê" você está rodando antes de investigar desempenho.
+
+> `[ATENÇÃO]` Snapshot **não é backup**: ele depende do disco original (guarda só a diferença). Se o disco ou o datastore falhar, o snapshot vai junto. Além disso, snapshots antigos degradam o desempenho da VM. Use-os para voltar de uma mudança arriscada em minutos, e backup (em outro lugar) para desastre.
+
 ## Hardware e armazenamento (para a conversa de infra)
 
 CPU/RAM/disco/NIC, **RAID** (Módulo 08) em **controladoras** físicas (hardware) x software, **SAN** (rede de armazenamento em blocos, iSCSI/FC) x **NAS** (arquivos, NFS/SMB), **IPMI/iDRAC/iLO** (gerência remota fora de banda), **fontes/UPS redundantes**. Mesmo migrando para a nuvem, esses termos aparecem em levantamentos e **migrações** (Azure Migrate, GCP Migrate to Virtual Machines).
@@ -158,11 +170,79 @@ Crie uma VM, tire um snapshot, quebre algo, restaure o snapshot e destrua.
 ### Lab 4 — AD conceitual
 Desenhe (papel ou diagrama) um domínio `empresa.local` com 2 DCs, OUs por departamento e 3 GPOs (senha, bloqueio de USB, mapeamento de pasta), indicando onde cada política é aplicada.
 
+### Lab 5 — PowerShell em container: relatório dos usuários do laboratório
+Cenário: o RH mandou o `usuarios.csv` e você precisa de um resumo por departamento, mais os comandos que criariam as contas no AD (sem executar nada).
+
+```bash
+docker run --rm -v ~/lab/dados:/dados:ro mcr.microsoft.com/powershell pwsh -NoProfile -Command '
+$u = Import-Csv /dados/usuarios.csv
+$u | Group-Object dept | Sort-Object Count -Descending | Select-Object Name, Count
+$u | Where-Object { [int]$_.salario -gt 8000 } | Select-Object nome, dept, salario
+foreach ($x in $u) { "New-ADUser -Name {0} -SamAccountName {0} -Department {1} -Path ''OU={1},DC=empresa,DC=local''" -f $x.nome, $x.dept }
+'
+```
+
+Compare com o que você faria em bash (`cut`, `sort`, `uniq -c`, módulo 04): a lógica é a mesma, mas aqui cada coluna do CSV já é uma **propriedade** do objeto. As linhas `New-ADUser` só são impressas, e é isso que se revisa antes de rodar em um DC real.
+
+### Lab 6 — LDAP de verdade em container (a "língua" do diretório)
+Cenário: entender o que o Linux pergunta ao AD, usando um OpenLDAP local como diretório de treino.
+
+```bash
+docker run -d --name ldap -e LDAP_ADMIN_PASSWORD=lab-troque -p 127.0.0.1:3389:389 osixia/openldap:1.5.0
+sleep 8
+cat > /tmp/ou.ldif <<'EOF'
+dn: ou=ti,dc=example,dc=org
+objectClass: organizationalUnit
+ou: ti
+
+dn: uid=ana,ou=ti,dc=example,dc=org
+objectClass: inetOrgPerson
+cn: Ana
+sn: Silva
+uid: ana
+EOF
+docker cp /tmp/ou.ldif ldap:/tmp/ou.ldif
+docker exec ldap ldapadd -x -D "cn=admin,dc=example,dc=org" -w lab-troque -f /tmp/ou.ldif
+docker exec ldap ldapsearch -x -b "dc=example,dc=org" -D "cn=admin,dc=example,dc=org" -w lab-troque "(uid=ana)" dn cn
+docker rm -f ldap
+```
+
+O `dn` (Distinguished Name) é o caminho do objeto na árvore: `uid=ana,ou=ti,dc=example,dc=org`, o mesmo raciocínio das OUs do AD. O filtro `(uid=ana)` é o que o SSSD envia quando alguém tenta logar.
+
+### Lab 7 — Relógio e Kerberos: por que o horário importa
+Cenário: o login no domínio "do nada" para de funcionar. A primeira suspeita é o horário.
+
+```bash
+date -u; timedatectl | grep -iE 'System clock synchronized|Time zone'
+docker run --rm alpine date -u                      # horário "visto" pelo container
+# simule uma diferença de 10 minutos e meça
+python3 - <<'PYX'
+import datetime
+agora = datetime.datetime.now(datetime.timezone.utc)
+cliente = agora + datetime.timedelta(minutes=10)
+dif = abs((cliente - agora).total_seconds()) / 60
+print(f"diferença: {dif:.0f} min ->", "Kerberos REJEITA (limite ~5 min)" if dif > 5 else "ok")
+PYX
+```
+
+> `[WSL]` Após suspender/hibernar o Windows, o relógio do WSL pode ficar atrasado. Corrija com `sudo hwclock -s` (se disponível) ou reiniciando a distro (`wsl --shutdown` no PowerShell do Windows).
+
 ### Desafios
 
 - **Desafio 1:** explique, em uma página, como um funcionário do RH **é desligado** da empresa em um ambiente com AD + servidores Linux integrados por SSSD (o que muda, e onde).
 - **Desafio 2:** compare AD DS e Entra ID em uma tabela (protocolos, estrutura, políticas, uso) e descreva o papel do Entra Connect.
 - **Desafio 3:** monte um roteiro de **migração** de um servidor de arquivos Windows on-premises para a nuvem (inventário, rede, identidade, dados, corte, rollback).
+- **Desafio 4:** com PowerShell em container, gere a partir do `usuarios.csv` um arquivo `grupos.csv` com uma linha por departamento e a lista de membros separada por `;`.
+
+  **Verifique:** `docker run --rm -v ~/lab/dados:/dados mcr.microsoft.com/powershell pwsh -NoProfile -Command 'Import-Csv /dados/grupos.csv | Measure-Object | Select-Object -ExpandProperty Count'` imprime um número entre `1` e `4` (os departamentos distintos), e `head -2 ~/lab/dados/grupos.csv` mostra o cabeçalho e a primeira linha.
+
+- **Desafio 5:** no OpenLDAP do Lab 6, adicione três usuários em duas OUs (`ti` e `vendas`) e liste só os usuários de `vendas`.
+
+  **Verifique:** `docker exec ldap ldapsearch -x -b "ou=vendas,dc=example,dc=org" -D "cn=admin,dc=example,dc=org" -w lab-troque "(objectClass=inetOrgPerson)" dn | grep -c '^dn:'` imprime a quantidade de usuários que você colocou em `vendas`.
+
+- **Desafio 6:** escreva um script `diagnostico-identidade.sh` que checa, em ordem, os pontos clássicos de falha de login por domínio (DNS resolve o domínio, porta 389/88 alcançável, horário sincronizado) e sai com `1` na primeira falha, apontando qual foi.
+
+  **Verifique:** `./diagnostico-identidade.sh localhost 3389; echo $?` (com o LDAP do Lab 6 rodando) imprime `OK` para a checagem de porta e termina com `0`; apontando para uma porta fechada (`./diagnostico-identidade.sh localhost 9`), imprime a falha e termina com `1`.
 
 ## Erros comuns nesta fase
 
@@ -171,6 +251,35 @@ Desenhe (papel ou diagrama) um domínio `empresa.local` com 2 DCs, OUs por depar
 - Esquecer que o AD depende de **DNS** funcionando.
 - Administrar tudo por interface gráfica, sem PowerShell (não repetível).
 - Ignorar o relógio: Kerberos exige horário sincronizado (tolerância de ~5 min).
+- Criar a GPO e esquecer de vinculá-la à OU certa (ou colocar o computador em outra OU).
+- Dar `Domain Admins` a contas do dia a dia em vez de uma conta administrativa separada (menor privilégio).
+- Manter snapshots antigos de VM "por segurança": degradam o desempenho e dão falsa sensação de backup.
+
+## Ponte com módulos anteriores
+
+| Vem de | Como reaparece aqui |
+|---|---|
+| Módulo 05 (usuários, grupos, permissões) | `id usuario@dominio` e grupos vindos do AD; UID/GID mapeados pelo SSSD |
+| Módulo 09 e 18 (redes, DNS) | AD depende de DNS (registros SRV); `dig -t SRV _ldap._tcp.empresa.local` |
+| Módulo 14 (virtualização, containers) | Hipervisor tipo 1/2 x container; `systemd-detect-virt` |
+| Módulo 17 (servidores) | Samba/NFS/SMB, DNS e DHCP existem no Windows Server também |
+| Módulo 21 (Ansible) | GPO é o equivalente corporativo do playbook (política em massa) |
+
+### Lab integrador — Descoberta de serviços de domínio e consulta ao diretório
+Reuse DNS (18), contêineres (20) e o resultado do Lab 6 para ver, na prática, como um cliente Linux "acha" um domínio.
+
+```bash
+# 1) Como o cliente descobre servidores de um serviço: registros SRV
+dig +short -t SRV _xmpp-server._tcp.gmail.com | head -3              # SRV de exemplo que costuma responder
+# 2) Suba o LDAP de treino e consulte tudo, como o SSSD faria
+docker run -d --name ldap -e LDAP_ADMIN_PASSWORD=lab-troque osixia/openldap:1.5.0 >/dev/null; sleep 8
+docker exec ldap ldapsearch -x -H ldap://localhost -b "dc=example,dc=org" -D "cn=admin,dc=example,dc=org" -w lab-troque "(objectClass=*)" dn | grep -c '^dn:'
+# 3) Consulta pontual, como uma checagem de existência da conta
+docker exec ldap ldapsearch -x -H ldap://localhost -b "dc=example,dc=org" -D "cn=admin,dc=example,dc=org" -w lab-troque "(cn=admin)" dn | grep '^dn:'
+docker rm -f ldap
+```
+
+> `[WSL]` Se `dig` não existir: `sudo apt install -y dnsutils`.
 
 ## Conexão com os módulos seguintes
 

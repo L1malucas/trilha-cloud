@@ -92,6 +92,10 @@ terraform destroy
 
 Leia o `plan`: `+` criar, `~` alterar, `-` apagar, `-/+` **recriar** (substituir). **Sempre leia o plano** antes de aplicar, principalmente os `-` e `-/+`.
 
+> `[TENTE VOCÊ]` Rode `terraform apply` duas vezes seguidas. O que a segunda mostra? Resposta: `No changes. Your infrastructure matches the configuration.` Isso é idempotência: o Terraform compara o código com o state e com a realidade e, se bate, não faz nada.
+
+> `[TENTE VOCÊ]` Apague `saida/ola.txt` na mão e rode `terraform plan`. Resposta: o plano volta a mostrar `local_file.saudacao will be created` — o Terraform percebeu que a realidade divergiu do state (drift) e propõe corrigir. Veja também `terraform plan -refresh-only`, que mostra só a divergência sem propor mudanças.
+
 ## Blocos essenciais
 
 | Bloco | Função |
@@ -123,6 +127,10 @@ resource "local_file" "regras" {
 ```
 
 `for_each` e `count` criam **múltiplas** instâncias a partir de uma lista/mapa. Dependências são **implícitas** (ao referenciar `recurso.atributo`) ou explícitas (`depends_on`).
+
+> `[TENTE VOCÊ]` Troque `[80, 443]` por `[80, 443, 8080]` e rode `plan`. Quantos recursos novos aparecem? Resposta: apenas 1 (`porta-8080.txt`), porque o `for_each` usa a chave de cada item; os outros dois não mudam. Com `count`, remover um item do meio renumeraria os índices e recriaria recursos — por isso `for_each` costuma ser a escolha mais segura.
+
+> `[ATENÇÃO]` O `for_each` não aceita uma **lista** de números direto: ele exige mapa ou conjunto de strings. Por isso o exemplo usa `toset([for p in var.portas : tostring(p)])`. O erro "The given "for_each" argument value is unsuitable" nasce quando você passa `var.portas` cru.
 
 ## Infraestrutura real com o provider Docker
 
@@ -165,6 +173,8 @@ terraform plan -refresh-only     # detecta drift (mudanças feitas fora do Terra
 ```
 
 **Workspaces** (`terraform workspace new prod`) separam states para ambientes; **módulos** empacotam padrões reutilizáveis (`module "rede" { source = "./modulos/rede" ... }`).
+
+> `[TENTE VOCÊ]` Como conferir que o state não vai parar no Git? Resposta: `printf '.terraform/\n*.tfstate\n*.tfstate.*\n' >> .gitignore && git check-ignore -v terraform.tfstate` — o comando imprime a regra que casou. Sem saída, o arquivo não está ignorado.
 
 ## Na nuvem (visão)
 
@@ -252,7 +262,11 @@ Conceitos-chave:
 - **Templates Jinja2**: arquivos com variáveis (`{{ var }}`).
 - **Variáveis e facts**: `ansible_hostname`, `ansible_distribution` (coletados automaticamente).
 
+> `[TENTE VOCÊ]` Veja todos os facts que o Ansible coleta sobre a sua máquina. Resposta: `ansible localhost -m setup -a 'filter=ansible_distribution*'` mostra `ansible_distribution: Ubuntu` e a versão. É daí que vêm condicionais como `when: ansible_distribution == "Ubuntu"`.
+
 > `[TEORIA]` Idempotência é o coração do Ansible: o resultado `changed=0` na segunda execução prova que a máquina **já está** no estado desejado. Se uma tarefa mostra `changed` sempre, provavelmente usa `shell`/`command` sem `creates:`/`changed_when:`.
+
+> `[TENTE VOCÊ]` Por que `lineinfile` é melhor que `echo "linha" >> arquivo` num playbook? Resposta: o `echo` acrescenta a linha toda vez que roda (duplica); o `lineinfile` só altera se a linha ainda não existir, então a segunda execução dá `changed=0`. Teste: `ansible localhost -c local -m lineinfile -a 'path=/tmp/teste.conf line="a=1" create=yes'` duas vezes e compare `changed`.
 
 ### Roles: organização e reuso
 
@@ -305,11 +319,140 @@ Crie **dois containers com sshd** (ou duas distros WSL), configure o inventário
 ### Lab 5 — Os dois juntos
 Terraform sobe 2 containers com SSH; um script gera o inventário a partir de `terraform output -json`; Ansible os configura.
 
+### Lab 6 — Terraform: gerar arquivos de configuração por ambiente
+Cenário: o time precisa de um arquivo `app.conf` por ambiente (dev, hml, prod), cada um com porta e nível de log próprios.
+
+```bash
+mkdir -p ~/lab/tf-ambientes && cd ~/lab/tf-ambientes
+cat > main.tf <<'EOF'
+terraform {
+  required_providers {
+    local = { source = "hashicorp/local", version = "~> 2.5" }
+  }
+}
+
+variable "ambientes" {
+  type = map(object({ porta = number, log = string }))
+  default = {
+    dev  = { porta = 8080, log = "debug" }
+    hml  = { porta = 8081, log = "info" }
+    prod = { porta = 80,   log = "warn" }
+  }
+}
+
+resource "local_file" "conf" {
+  for_each = var.ambientes
+  filename = "${path.module}/saida/${each.key}.conf"
+  content  = "porta=${each.value.porta}\nlog=${each.value.log}\n"
+}
+
+output "arquivos" {
+  value = [for f in local_file.conf : f.filename]
+}
+EOF
+terraform init && terraform apply -auto-approve
+cat saida/*.conf
+sed -i 's/log = "warn"/log = "error"/' main.tf && terraform plan   # só prod muda (~ ou -/+)
+terraform destroy -auto-approve
+```
+
+### Lab 7 — Ansible: configurar o próprio WSL sem tocar em serviços
+Cenário: padronizar usuário de deploy, diretório de app e um arquivo de configuração em qualquer máquina. Evita serviços para funcionar no WSL com ou sem systemd.
+
+```bash
+mkdir -p ~/lab/ansible-base && cd ~/lab/ansible-base
+printf '[local]\nlocalhost ansible_connection=local\n' > inventario.ini
+cat > base.yml <<'EOF'
+- name: Base da aplicação
+  hosts: local
+  become: true
+  vars:
+    app_dir: /opt/trilhashop
+  tasks:
+    - name: Grupo da aplicação
+      ansible.builtin.group:
+        name: trilhashop
+        state: present
+
+    - name: Usuário de deploy sem login interativo
+      ansible.builtin.user:
+        name: deploy
+        group: trilhashop
+        shell: /usr/sbin/nologin
+        system: true
+
+    - name: Diretório da aplicação
+      ansible.builtin.file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: deploy
+        group: trilhashop
+        mode: "0750"
+
+    - name: Arquivo de configuração
+      ansible.builtin.copy:
+        dest: "{{ app_dir }}/app.conf"
+        content: "ambiente=lab\n"
+        owner: deploy
+        group: trilhashop
+        mode: "0640"
+EOF
+ansible-playbook -i inventario.ini base.yml --check --diff -K
+ansible-playbook -i inventario.ini base.yml -K
+ansible-playbook -i inventario.ini base.yml -K     # changed=0
+ls -ld /opt/trilhashop && id deploy
+```
+
+> `[WSL]` O `-K` pede a senha do sudo (`become`). Se você configurou sudo sem senha, pode omitir.
+
+### Lab 8 — Provar o drift com Terraform + Docker
+Cenário: alguém parou o container "na mão" durante um incidente. O Terraform precisa notar.
+
+```bash
+mkdir -p ~/lab/tf-drift && cd ~/lab/tf-drift
+cat > main.tf <<'EOF'
+terraform {
+  required_providers {
+    docker = { source = "kreuzwerker/docker", version = "~> 3.0" }
+  }
+}
+provider "docker" {}
+resource "docker_image" "nginx" {
+  name         = "nginx:1.27"
+  keep_locally = true
+}
+resource "docker_container" "web" {
+  name  = "web-drift"
+  image = docker_image.nginx.image_id
+  ports {
+    internal = 80
+    external = 8086
+  }
+}
+EOF
+terraform init && terraform apply -auto-approve
+docker rm -f web-drift                       # a mudança "fora" do Terraform
+terraform plan                                # mostra docker_container.web will be created
+terraform apply -auto-approve && curl -sI localhost:8086 | head -1
+terraform destroy -auto-approve
+```
+
 ### Desafios
 
 - **Desafio 1:** módulo Terraform reutilizável `modulos/app` (container + volume + rede) chamado duas vezes (dev e prod) com variáveis diferentes.
 - **Desafio 2:** role Ansible `hardening` que aplica o SSH endurecido do Módulo 10 (idempotente, com handler de reload) e prove com `--check`.
 - **Desafio 3:** detecte *drift*: altere manualmente o container criado pelo Terraform (`docker exec`/`stop`) e mostre o `terraform plan` detectando a diferença.
+- **Desafio 4:** no Lab 6, adicione uma validação (`validation {}`) que rejeite portas fora de 1–65535 e uma segunda variável que gere também um `index.html` por ambiente.
+
+  **Verifique:** `terraform plan -var 'ambientes={x={porta=99999,log="info"}}'` termina com `Error: Invalid value for variable` e `terraform validate` imprime `Success! The configuration is valid.` com os valores padrão.
+
+- **Desafio 5:** transforme o `base.yml` do Lab 7 numa role `base` com `defaults/main.yml` para `app_dir`, e rode com `app_dir` diferente via `-e`.
+
+  **Verifique:** `ansible-playbook -i inventario.ini site.yml -K -e app_dir=/opt/outra` termina com `failed=0` e `ls -ld /opt/outra` mostra `drwxr-x--- ... deploy trilhashop`.
+
+- **Desafio 6:** escreva um playbook que use `lineinfile` para desativar `PermitRootLogin` em um `sshd_config` de teste (cópia em `~/lab/sshd_config`, nunca o real) e dispare um handler só quando houver mudança.
+
+  **Verifique:** a 1ª execução mostra `changed=1` e a 2ª `changed=0`; `grep -E '^PermitRootLogin' ~/lab/sshd_config` imprime `PermitRootLogin no`.
 
 **Limpeza:** `terraform destroy` em cada projeto; `docker rm -f` dos containers de teste.
 
@@ -321,6 +464,55 @@ Terraform sobe 2 containers com SSH; um script gera o inventário a partir de `t
 - Usar `shell`/`command` no Ansible onde existe módulo (perde idempotência).
 - Esquecer `--check` antes de rodar em produção.
 - Playbook que só roda bem a primeira vez.
+- Passar uma lista a `for_each` sem converter em `toset(...)` ou mapa.
+- Usar `count` para itens que podem sair do meio da lista (reindexa e recria recursos).
+- Testar playbook direto no `sshd_config` real em vez de numa cópia, e perder o acesso SSH.
+
+## Ponte com módulos anteriores
+
+| Vem de | Como reaparece aqui |
+|---|---|
+| Módulo 11 (scripts) | Idempotência (`mkdir -p`, `grep -q ||`) vira regra nos módulos do Ansible |
+| Módulo 15 e 19 (Git, IaC) | `.gitignore` do state, PR para revisar o `plan`, tag por versão de módulo |
+| Módulo 20 (Docker) | Provider `docker` e containers como "máquinas" do Ansible |
+| Módulo 05 (usuários, permissões) | Módulos `user`, `group`, `file` com `mode`/`owner` |
+| Módulo 06 (systemd) | Módulo `service` do Ansible controla units |
+
+### Lab integrador — Terraform gera, script monta inventário, Ansible aplica
+Reaproveite o script shell (módulo 11) para ligar as duas ferramentas, com containers do módulo 20.
+
+```bash
+mkdir -p ~/lab/tf-ansible && cd ~/lab/tf-ansible
+cat > main.tf <<'EOF'
+terraform {
+  required_providers {
+    docker = { source = "kreuzwerker/docker", version = "~> 3.0" }
+  }
+}
+provider "docker" {}
+resource "docker_image" "alpine" {
+  name         = "alpine:3.20"
+  keep_locally = true
+}
+resource "docker_container" "alvo" {
+  for_each = toset(["app1", "app2"])
+  name     = each.key
+  image    = docker_image.alpine.image_id
+  command  = ["sleep", "infinity"]
+}
+output "nomes" {
+  value = [for c in docker_container.alvo : c.name]
+}
+EOF
+terraform init && terraform apply -auto-approve
+# script do módulo 11: transforma o output em inventário
+{ echo "[apps]"; terraform output -json nomes | python3 -c 'import json,sys; [print(n+" ansible_connection=docker ansible_python_interpreter=/usr/bin/python3") for n in json.load(sys.stdin)]'; } > inventario.ini
+cat inventario.ini
+ansible apps -i inventario.ini -m raw -a "cat /etc/alpine-release"
+terraform destroy -auto-approve
+```
+
+> `[WSL]` O conector `ansible_connection=docker` usa o socket do Docker; módulos que exigem Python (como `ping`) precisam de Python na imagem, por isso o exemplo usa `raw`.
 
 ## Conexão com os módulos seguintes
 

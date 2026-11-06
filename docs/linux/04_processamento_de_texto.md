@@ -41,6 +41,8 @@ wc -l access.log            # conta linhas
 less access.log             # navega (/ procura, n próxima, q sai)
 ```
 
+> `[TENTE VOCÊ]` Separe o cabeçalho dos dados em um CSV: `head -n 1 ~/lab/dados/usuarios.csv` e `tail -n +2 ~/lab/dados/usuarios.csv | wc -l`. Resposta: o primeiro mostra `id,nome,email,dept,salario`; o segundo conta `8`. O `tail -n +2` significa "comece a partir da linha 2" (não "as 2 últimas"), então é a forma clássica de pular cabeçalho antes de somar ou ordenar.
+
 ## grep: procurar linhas
 
 `grep` imprime as **linhas** que casam com um padrão.
@@ -56,6 +58,8 @@ grep -A2 -B1 "ERROR" app.log | head   # 1 linha antes e 2 depois (contexto)
 grep -o '"GET [^ ]*' access.log | head   # imprime só o trecho que casou (-o)
 grep -l "ERROR" ~/lab/dados/*.log     # só os NOMES dos arquivos que casam
 ```
+
+> `[TENTE VOCÊ]` Confira que seu raciocínio sobre filtros fecha: `cd ~/lab/dados; grep -vc INFO app.log` e `grep -Ec 'WARN|ERROR' app.log`. Resposta: os dois números são **iguais**. Cada linha do log tem exatamente um nível (INFO, WARN ou ERROR), então "tudo que não é INFO" é o mesmo conjunto de "WARN ou ERROR". Usar duas formas diferentes para chegar ao mesmo número é um bom teste de sanidade antes de confiar num relatório.
 
 ### Expressões regulares (regex)
 
@@ -100,6 +104,8 @@ tr -d '\r' < arquivo-windows.txt       # remove CRs de arquivos do Windows
 ```
 
 > `[ATENÇÃO]` `uniq` só agrupa linhas **adjacentes** iguais, por isso o padrão é sempre `sort | uniq -c`. Sem `sort` antes, ele conta errado.
+
+> `[TENTE VOCÊ]` Veja o `uniq` errar de propósito: `printf 'a\nb\na\n' | uniq -c` e depois `printf 'a\nb\na\n' | sort | uniq -c`. Resposta: sem `sort` sai `1 a`, `1 b`, `1 a` (o `a` aparece duas vezes porque as linhas iguais não estavam juntas); com `sort` sai `2 a` e `1 b`. Num log de 5000 linhas isso produziria um ranking errado sem nenhum aviso — por isso o `sort` vem sempre antes.
 
 ### A receita clássica: contar e ranquear
 
@@ -153,6 +159,10 @@ awk 'BEGIN{FS=","; OFS=" | "} NR>1 {print $2,$4}' usuarios.csv
 Estrutura: `awk 'CONDIÇÃO { AÇÃO }'`; `BEGIN` roda antes, `END` depois de ler tudo.
 
 > `[TEORIA]` Quando usar o quê: **grep** para *achar linhas*; **cut** para *cortar colunas simples*; **sed** para *substituir/remover texto*; **awk** quando há *colunas + cálculo/condição*. Se a tarefa pede "somar", "agrupar" ou "comparar campos", é awk.
+
+> `[TENTE VOCÊ]` Conte linhas com o `awk` e compare com o `wc`: `awk 'END {print NR}' ~/lab/dados/access.log` e `awk '$9==404' ~/lab/dados/access.log | wc -l` contra `grep -c ' 404 ' ~/lab/dados/access.log`. Resposta: o primeiro imprime `5000` (o `NR` guarda o número da última linha lida, e o bloco `END` roda ao final); os dois últimos dão o mesmo número. A vantagem do `$9==404` é testar **só a coluna do status**: um `grep 404` solto também casaria um `404` dentro do campo de bytes ou do caminho.
+
+> `[ATENÇÃO]` `cut -d','` e `awk -F','` tratam toda vírgula como separador. Se um CSV tiver `"Silva, Ana"` entre aspas, o campo será cortado no meio e as colunas seguintes deslocam. Para CSV de verdade (com aspas), use uma ferramenta que entenda o formato (`csvkit`, Python `csv`); com os dados do lab, que não têm aspas, o `awk` serve.
 
 ## xargs, tee, diff, paste
 
@@ -208,11 +218,57 @@ Para treinar de verdade: `vimtutor` (30 minutos, interativo).
 2. Em `usuarios.csv`, calcule o salário médio por departamento com awk.
 3. Converta o `app.log` para só `HORA NIVEL` por linha.
 
+### Lab 4 — Incidente: pico de erros 500
+
+Cenário: o monitoramento acusou erros 500 e você precisa dizer **quando** e **onde**. Use só pipes sobre `access.log`:
+
+```bash
+cd ~/lab/dados
+# Em que hora aconteceram mais 500? ($4 = [10/Jan/2026:HH:MM:SS; cut -c2-14 fica com "10/Jan/2026:HH")
+awk '$9==500 {print $4}' access.log | cut -c2-14 | sort | uniq -c | sort -rn | head -3
+# Qual página falhou mais?
+awk '$9==500 {print $7}' access.log | sort | uniq -c | sort -rn | head -3
+# Que fração do total isso representa?
+awk '{t++} $9==500 {e++} END {printf "%d de %d (%.1f%%)\n", e, t, 100*e/t}' access.log
+```
+
+Leia como investigação: primeiro *quando* (agrupando pela hora), depois *onde* (agrupando pela página), por fim *quanto* (proporção). Cada resposta direciona a pergunta seguinte.
+
+### Lab 5 — Limpando e consultando o CSV de RH
+
+Cenário: o RH pede os três maiores salários e um arquivo com ponto e vírgula para abrir no Excel em português:
+
+```bash
+cd ~/lab/dados
+tail -n +2 usuarios.csv | sort -t',' -k5 -nr | head -3 | cut -d',' -f2,5      # top 3 salários
+awk -F',' 'NR>1 && $5>8000 {print $2}' usuarios.csv                          # quem ganha mais de 8000
+sed 's/,/;/g' usuarios.csv > ~/lab/usuarios-pv.csv                           # nova versão, original intacto
+sed -n '1,3p' ~/lab/usuarios-pv.csv
+```
+
+Note que o `sed` sem `-i` escreve em outro arquivo: o original fica seguro. É a prática correta para transformar dados que não são seus.
+
+### Lab 6 — Lendo configuração sem o ruído
+
+Cenário: um arquivo de configuração tem 200 linhas, quase todas comentários. Mostre só o que está valendo e teste uma mudança sem tocar no original:
+
+```bash
+grep -vE '^\s*(#|$)' /etc/login.defs | head -10          # só linhas ativas
+grep -E '^UMASK' /etc/login.defs                          # a umask padrão do sistema
+cp /etc/login.defs ~/lab/login.defs && cp ~/lab/login.defs ~/lab/login.defs.orig
+sed -i 's/^UMASK.*/UMASK 027/' ~/lab/login.defs
+diff -u ~/lab/login.defs.orig ~/lab/login.defs
+```
+
+O `diff -u` mostra a mudança no formato que o Git usa (`-` linha antiga, `+` linha nova). Trabalhar numa **cópia** e comparar com `diff` antes de aplicar em `/etc` é um hábito que evita muitos incidentes.
+
 ### Desafios
 
 - **Desafio 1:** produza um relatório de 5 linhas (total de requisições, % de erros 4xx/5xx, top 3 IPs, página mais lenta/maior, hora de pico) usando **só pipes** sobre `access.log`.
 - **Desafio 2:** reescreva o mesmo relatório com **um único `awk`**.
 - **Desafio 3:** valide e-mails e IPs: extraia de um texto livre só e-mails válidos e IPs com octetos entre 0 e 255.
+- **Desafio 4:** gere em `~/lab/403-por-ip.txt` a lista de IPs que receberam resposta 403, com a quantidade ao lado (no formato `quantidade ip`), do maior para o menor, usando apenas o `access.log`.
+  **Verifique:** `awk '{s+=$1} END {print s}' ~/lab/403-por-ip.txt` e `grep -c ' 403 ' ~/lab/dados/access.log` devem imprimir o **mesmo número**.
 
 ## Erros comuns nesta fase
 
@@ -222,6 +278,43 @@ Para treinar de verdade: `vimtutor` (30 minutos, interativo).
 - Regex sem aspas simples (o shell interpreta os símbolos).
 - Esquecer o `-E` do `grep` ao usar `+`, `?`, `|`, `()`.
 - Escolher `awk`/`sed` quando um `cut` simples resolveria (ou o contrário).
+- Contar com `grep 404` solto e casar números que não são o status (bytes, caminho); prefira filtrar pela coluna certa.
+- Tratar CSV com vírgulas dentro de aspas como se fosse separado por vírgula simples.
+- Usar `tail -2` achando que é "a partir da linha 2" (o correto é `tail -n +2`).
+
+## Ponte com módulos anteriores
+
+| Vem de | Como reaparece aqui |
+|---|---|
+| Módulo 00 — `gera-lab.sh` | Gerou o `access.log`, `app.log` e `usuarios.csv` que são o seu material de análise |
+| Módulo 01 — `/etc` e arquivos de configuração | `grep -vE '^\s*#'` e `sed` limpam e alteram esses arquivos |
+| Módulo 02 — pipes, `tee`, redirecionamento, `$?` | Montam as receitas "extrair → agrupar → contar → ranquear" |
+| Módulo 02 — variáveis e `$(date)` | Nomeiam relatórios por data |
+| Módulo 03 — `find`, `xargs`, `tar` | Localizam logs em massa antes de aplicar `grep`/`awk` |
+
+### Lab integrador — Relatório de acesso reutilizável
+
+Reúna variável com valor padrão (02), arquivos e pastas (03), `find` (03) e a análise de texto deste módulo num script que você pode rodar sobre qualquer log:
+
+```bash
+cd ~/lab
+cat > relatorio-acesso.sh <<'EOF'
+#!/usr/bin/env bash
+LOG=${1:-$HOME/lab/dados/access.log}
+echo "Relatório de $LOG — $(date +%F)"
+echo "Total de requisições: $(wc -l < "$LOG")"
+echo "Erros 5xx: $(awk '$9>=500' "$LOG" | wc -l)"
+echo "Top 3 IPs:"
+cut -d' ' -f1 "$LOG" | sort | uniq -c | sort -rn | head -3
+EOF
+chmod +x relatorio-acesso.sh
+mkdir -p relatorios
+./relatorio-acesso.sh > relatorios/acesso-$(date +%F).txt
+find relatorios -type f -name '*.txt'
+head -3 relatorios/acesso-$(date +%F).txt
+```
+
+Esperado: a primeira linha cita o caminho do log, `Total de requisições: 5000` e um número de erros 5xx. Para ter o relatório de outro log, passe o caminho: `./relatorio-acesso.sh ~/lab/dados/app.log` roda, mas as colunas não fazem sentido — um bom lembrete de que cada script assume o formato do seu log.
 
 ## Conexão com os módulos seguintes
 

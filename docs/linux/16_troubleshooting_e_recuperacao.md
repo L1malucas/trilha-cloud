@@ -60,6 +60,8 @@ Causas típicas: erro de sintaxe na config, **porta em uso**, permissão em arqu
 
 > `[ATENÇÃO]` Leia a **mensagem de erro inteira** antes de agir: "Address already in use" e "Permission denied" têm causas totalmente diferentes, e a resposta estava escrita no log.
 
+> `[TENTE VOCÊ]` Reproduza o erro mais comum de "serviço não sobe" em dois comandos. Raciocínio: duas instâncias não podem escutar na mesma porta; o kernel entrega a porta à primeira e recusa a segunda. Rode `python3 -m http.server 9000 &` e, logo depois, `python3 -m http.server 9000`. Resposta: a segunda termina com `OSError: [Errno 98] Address already in use`. Confirme o dono com `ss -tlnp | grep 9000` (mostra o PID da primeira) e limpe com `kill %1`. É exatamente o que o `journalctl -xeu nginx` mostraria se outro processo ocupasse a 80.
+
 ## Cenário 2 — Disco cheio
 
 ```bash
@@ -86,9 +88,13 @@ sudo -u usuario test -r arquivo && echo ok
 
 `namei -l` é uma joia: ele revela **onde** do caminho a permissão falha.
 
+> `[TENTE VOCÊ]` Provoque um "permission denied" e ache **onde** do caminho ele nasce. Raciocínio: para entrar num diretório é preciso a permissão `x` em *todos* os níveis; basta um nível fechado para o resto ficar inacessível. Rode (como usuário comum, root ignora permissões) `mkdir -p ~/lab/t/a/b && chmod 000 ~/lab/t/a && ls ~/lab/t/a/b`, depois `namei -l ~/lab/t/a/b`. Resposta: `ls` dá `Permission denied`, e o `namei -l` mostra a linha `d--------- seu_usuario seu_usuario a`: o ponto de falha é `a`, e não `b`. Restaure com `chmod 755 ~/lab/t/a && rm -r ~/lab/t`.
+
 ## Cenário 4 — Rede fora
 
 Percorra a escada do Módulo 09: `ip a` → `ip r` → `ping` gateway → `ping 1.1.1.1` → `dig` → `curl`. Em cada degrau, o ponto em que falha aponta a camada culpada (interface/rota/internet/DNS/serviço).
+
+> `[ATENÇÃO]` `ping` falhando **não prova** que a rede está fora: muitos firewalls e provedores bloqueiam ICMP. Teste a camada que importa para o sintoma, com `curl -sS -o /dev/null -w "%{http_code}\n" http://alvo` ou `nc -zv alvo 443`. E o inverso também vale: `ping` funcionando não garante que a porta do serviço esteja aberta.
 
 ## Cenário 5 — Processo travado ou consumindo tudo
 
@@ -99,6 +105,8 @@ ps aux | awk '$8 ~ /Z/'                 # zumbis (estado Z)
 sudo strace -p <PID> -f -tt             # o que o processo faz (chamadas de sistema)
 sudo kill -15 <PID>; sleep 5; sudo kill -9 <PID>   # termine com educação primeiro
 ```
+
+> `[TENTE VOCÊ]` Como ler o estado de um processo para saber se ele está "travado"? Raciocínio: a coluna `STAT` do `ps` resume o estado do kernel (`S` dormindo, `R` rodando, `T` parado, `Z` zumbi). Rode `sleep 300 & kill -STOP $!; ps -o pid,stat,cmd -p $!`, depois `kill -CONT $!; ps -o stat= -p $!`. Resposta: primeiro `T` (parado por sinal, e não por defeito), depois `S` (dormindo, normal para um `sleep`). Encerre com `kill $!`. Um processo em `T` ou `D` (espera de I/O) não adianta "reiniciar o serviço" sem entender por quê.
 
 ## Cenário 6 — OOM killer (falta de memória)
 
@@ -150,6 +158,63 @@ Quando o sistema não chega ao login:
 
 Alvos úteis: `systemctl rescue` (modo de resgate, monousuário) e `systemctl emergency`. **Simulação no WSL:** na distro `ubuntu-lab`, quebre o `/etc/fstab` com uma linha inválida (sem `nofail`), reinicie com `wsl --terminate` e observe o aviso/erro do `mount -a`, depois restaure.
 
+## Cenário 10 — "No space left" com espaço sobrando (inodes)
+
+Sintoma: `touch: cannot touch 'arq': No space left on device`, mas `df -h` mostra espaço livre. Reproduza com uma imagem minúscula e poucos inodes (técnica do Módulo 08):
+
+```bash
+truncate -s 20M ~/lab/pequeno.img
+mkfs.ext4 -F -q -N 128 ~/lab/pequeno.img          # só ~128 inodes
+sudo mkdir -p /mnt/pequeno && sudo mount -o loop ~/lab/pequeno.img /mnt/pequeno
+sudo chown $USER /mnt/pequeno
+for i in $(seq 1 200); do touch /mnt/pequeno/f$i 2>/dev/null || { echo "parou no arquivo $i"; break; }; done
+df -h /mnt/pequeno          # sobra espaço em bytes
+df -i /mnt/pequeno          # IUse% = 100%
+```
+
+Diagnóstico: `df -i` entrega a causa raiz. Correção: apagar os arquivos pequenos (`rm /mnt/pequeno/f*`) ou recriar o sistema de arquivos com mais inodes (`mkfs.ext4 -i` define bytes por inode). Verificação: `touch /mnt/pequeno/novo && echo ok`. Limpeza: `sudo umount /mnt/pequeno && rm ~/lab/pequeno.img`.
+
+## Cenário 11 — O serviço que reinicia em loop
+
+Sintoma: `systemctl status` alterna entre `activating (auto-restart)` e `failed`, e depois some com `start-limit-hit`. Reproduza:
+
+```bash
+sudo tee /etc/systemd/system/quebrado.service >/dev/null <<'EOF'
+[Unit]
+Description=Servico quebrado de proposito
+[Service]
+ExecStart=/usr/local/bin/app-fantasma
+Restart=on-failure
+RestartSec=1
+EOF
+sudo systemctl daemon-reload && sudo systemctl start quebrado
+sleep 6; systemctl status quebrado --no-pager | head -8
+journalctl -u quebrado --no-pager | tail -5
+```
+
+Diagnóstico: o status traz `status=203/EXEC` e o journal diz que não conseguiu executar o binário (não existe). Hipótese confirmada com `ls -l /usr/local/bin/app-fantasma`. Correção:
+
+```bash
+printf '#!/bin/sh\nexec sleep infinity\n' | sudo tee /usr/local/bin/app-fantasma >/dev/null
+sudo chmod +x /usr/local/bin/app-fantasma
+sudo systemctl reset-failed quebrado && sudo systemctl restart quebrado
+systemctl is-active quebrado         # active
+```
+
+> `[ATENÇÃO]` `Restart=on-failure` esconde o problema: o serviço parece "vivo e morrendo" em vez de "fora do ar". Depois de corrigir a causa, é preciso `reset-failed`, senão o limite de tentativas (`start-limit-hit`) continua bloqueando. Limpeza: `sudo systemctl disable --now quebrado; sudo rm /etc/systemd/system/quebrado.service /usr/local/bin/app-fantasma; sudo systemctl daemon-reload`.
+
+## Cenário 12 — O script que "não existe" (CRLF)
+
+Sintoma: o script tem permissão `x`, o arquivo existe, e mesmo assim `./relatorio.sh` responde `No such file or directory`. É clássico de arquivo editado no Windows. Reproduza:
+
+```bash
+printf '#!/usr/bin/env bash\r\necho oi\r\n' > ~/lab/crlf.sh && chmod +x ~/lab/crlf.sh
+~/lab/crlf.sh                                  # /usr/bin/env: 'bash\r': No such file or directory
+head -1 ~/lab/crlf.sh | od -c | head -2        # o \r aparece no fim da primeira linha
+```
+
+Diagnóstico: o kernel lê a primeira linha (*shebang*) literalmente e procura um interpretador chamado `bash\r`. Correção: `sed -i 's/\r$//' ~/lab/crlf.sh` e rode de novo (imprime `oi`). Prevenção: `git config --global core.autocrlf input` e um editor configurado para fim de linha LF.
+
 ## Laboratório: a caixa de quebras
 
 Crie um script que **sabota** a distro `ubuntu-lab` de 6 formas, e você diagnostica cada uma usando **só o terminal**. Exemplo de `quebra.sh` (rode apenas na distro descartável):
@@ -193,6 +258,8 @@ Para cada item: **sintoma → hipótese → comandos → causa raiz → correç�
 - **Desafio 1:** resolva os 6 cenários da caixa de quebras e documente cada um num **runbook** em Markdown (formato: sintoma, diagnóstico, causa raiz, correção, prevenção).
 - **Desafio 2:** corrompa uma imagem ext4 em loop (Módulo 08) e a recupere com `fsck`.
 - **Desafio 3:** escreva um script `diagnostico.sh` que coleta (CPU, memória, disco, inodes, serviços falhados, últimos erros, portas) em um relatório para anexar a chamados.
+- **Desafio 4 (quebre e recupere: módulos 05, 11 e 15):** crie o repositório `~/lab/runbook-demo` com um `relatorio.sh` que imprime `linhas ERROR: N` contando com `grep -c ERROR ~/lab/dados/app.log`, e faça o commit inicial. Depois sabote o script de **três formas, uma de cada vez**: remova o bit `x`, converta para CRLF e faça `chmod 000` no `app.log`. Para cada falha, aplique o método (sintoma, hipótese, teste, correção) e faça um commit com a correção. **Verifique:** `cd ~/lab/runbook-demo && ./relatorio.sh | grep -c 'linhas ERROR:'` deve imprimir `1`, e `git log --oneline | wc -l` deve imprimir `4`.
+- **Desafio 5 (quebre e recupere: módulos 03, 08 e 12):** faça `sudo cp /etc/fstab /etc/fstab.bak` na distro **de laboratório**, acrescente a linha `/dev/sdz9 /mnt/fantasma ext4 defaults 0 2` ao `/etc/fstab` e rode `sudo mount -a`. Leia o erro inteiro, descubra pelo `journalctl` ou `dmesg` o que o sistema registrou, e recupere de **duas** maneiras: restaurando o backup e, noutra rodada, mantendo a linha mas tornando-a inofensiva com `nofail`. **Verifique:** `sudo mount -a; echo $?` deve imprimir `0` ao final de cada uma das duas rodadas (e diferente de zero, tipicamente `32`, antes de corrigir).
 
 ## Erros comuns nesta fase
 
@@ -202,6 +269,39 @@ Para cada item: **sintoma → hipótese → comandos → causa raiz → correç�
 - Rodar `fsck` com o sistema montado.
 - Desativar SELinux/firewall como "teste" e esquecer de religar.
 - Não documentar a solução.
+- Corrigir o sintoma (reiniciar o serviço) sem achar a causa raiz: o problema volta, geralmente na pior hora.
+- Editar `/etc/fstab`, `sudoers` ou `sshd_config` sem backup e sem validar antes de sair (`mount -a`, `visudo -c`, `sshd -t`).
+- Concluir "a rede caiu" só porque o `ping` falhou, ou "o arquivo sumiu" só porque a API devolveu 404: o código mostra o efeito, e não a causa.
+
+## Ponte com módulos anteriores
+
+Este módulo é o "módulo de todos os módulos": cada ferramenta abaixo já foi apresentada e agora vira instrumento de diagnóstico.
+
+| Vem de | Como reaparece aqui |
+|---|---|
+| Módulos 02 e 04 — shell, `grep`, `awk` | Filtrar logs e saídas gigantes até sobrar a linha que explica o erro |
+| Módulo 03 — caminhos e permissões | `ls -ld`, `namei -l` e o bit `x` nos diretórios do caminho |
+| Módulo 05 — usuários e grupos | `id`, `sudo -u`, `getfacl` para responder "esse usuário pode ler isto?" |
+| Módulo 06 — processos e systemd | `status`, `reset-failed`, estados do `ps`, sinais |
+| Módulo 08 — discos e `fstab` | `df -i`, `fsck`, `mount -a` e as imagens em loop como cobaia |
+| Módulo 09 — redes | A escada `ip` -> `ping` -> `dig` -> `curl` |
+| Módulo 12 — logs | `journalctl -u`, `dmesg`, `logger` para deixar evidência |
+| Módulo 13 — `/proc` e kernel | OOM, estado de processo, parâmetros do `sysctl` |
+| Módulo 15 — Git | Versionar o runbook e as correções; `git diff` mostra "o que mudou" |
+
+### Cenário 13 — Incidente integrador: "o arquivo existe, mas a API devolve 404"
+Cenário: um serviço Python serve os arquivos de `~/lab/dados`, e de repente `app.log` passa a dar 404. O 404 sugere "arquivo não existe", mas a causa é outra, e você vai achá-la só com o método. Monte o ambiente:
+```bash
+sudo -v
+sudo systemd-run --unit=api-lab -p User=$USER python3 -m http.server 5000 --directory "$HOME/lab/dados"
+sleep 1
+curl -sI localhost:5000/app.log | head -1            # HTTP/1.0 200 OK
+chmod 000 ~/lab/dados/app.log                        # a "mudança" que ninguém lembra
+curl -sI localhost:5000/app.log | head -1            # HTTP/1.0 404 File not found
+```
+Agora diagnostique, sem olhar a linha do `chmod`: (1) o arquivo existe? `ls -l ~/lab/dados/app.log`; (2) o serviço está vivo? `systemctl is-active api-lab`; (3) quem executa o serviço e o que consegue ler? `systemctl show api-lab -p User` e `sudo -u $USER test -r ~/lab/dados/app.log && echo ok || echo negado`; (4) o log da requisição: `journalctl -u api-lab --no-pager | tail -3`; (5) o caminho: `namei -l ~/lab/dados/app.log`. Causa raiz: `---------` no arquivo; o servidor trata qualquer erro de leitura como 404. Correção: `chmod 644 ~/lab/dados/app.log`; verificação: o `curl -sI` volta a dar `200`. Registre num runbook versionado (Git) e limpe com `sudo systemctl stop api-lab`.
+
+A lição de integração: o **código HTTP descreve o que o servidor decidiu mostrar, e não a causa**. Quem leva você à causa são as ferramentas dos módulos anteriores.
 
 ## Conexão com os módulos seguintes
 
