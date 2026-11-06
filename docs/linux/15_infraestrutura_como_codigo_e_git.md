@@ -244,6 +244,60 @@ O hook mora em `.git/hooks`, que **não é versionado**: cada pessoa precisa ins
 - **Desafio 3:** explique, com suas palavras, `merge` x `rebase` (aprofundado no Módulo 19).
 - **Desafio 4:** apague com `git branch -D` uma branch que tenha um commit **não integrado** e recupere esse commit numa nova branch chamada `recuperada`, usando só o que o Git ainda lembra. **Verifique:** `git log --oneline -1 recuperada` deve mostrar o hash curto e a mensagem do commit que você tinha apagado, e `git branch --list recuperada` deve imprimir `  recuperada`.
 
+### Desafio avançado — Segredo vazado: apagar do histórico de verdade
+
+**Nível:** avançado — leva de 1 a 3 horas
+
+- **Cenário:** alguém commitou `DB_PASSWORD=hunter2-prod` num `config.env` e o repositório já foi publicado no remoto da empresa. Trocar a senha é o passo 1, mas o jurídico exige que o segredo **não exista mais** em nenhum commit, tag ou objeto, nem no remoto. As branches e tags são usadas por outras pessoas, então os commits precisam manter autoria, datas e mensagens. Monte o cenário abaixo e faça a limpeza.
+
+```bash
+cd ~/lab && rm -rf vazou remoto.git && git init -q --bare remoto.git && git clone -q remoto.git vazou && cd vazou
+git config user.name Lab && git config user.email lab@exemplo.com && git switch -qc main
+echo v1 > app.txt && git add . && git commit -qm "feat: base"
+printf 'PORTA=8080\nDB_PASSWORD=hunter2-prod\n' > config.env && git add . && git commit -qm "feat: config"
+git rev-parse HEAD:config.env > ~/lab/blobs-vazados.txt
+echo v2 >> app.txt && git commit -qam "fix: ajusta app"
+sed -i 's/8080/9090/' config.env && git commit -qam "fix: muda porta"
+git rev-parse HEAD:config.env >> ~/lab/blobs-vazados.txt
+git tag -a v1.0 -m "release 1.0"
+git switch -qc hotfix && echo h >> app.txt && git commit -qam "fix: hotfix urgente" && git switch -q main
+git push -q origin --all && git push -q origin --tags
+git rev-list --all --count > ~/lab/vazou-antes.txt
+git log --all --format=%s | sort | md5sum >> ~/lab/vazou-antes.txt
+```
+
+- **Requisitos:**
+  1. Em **todas** as branches e tags do clone, nenhum commit contém `hunter2-prod`, mas `config.env` continua existindo com `PORTA` (o histórico da porta `8080` para `9090` é preservado).
+  2. A tag `v1.0` continua **anotada** e aponta para o commit reescrito equivalente.
+  3. O número de commits e o conjunto de mensagens são iguais aos de antes (compare com `~/lab/vazou-antes.txt`); autor e data de cada commit não mudam.
+  4. Os dois blobs listados em `~/lab/blobs-vazados.txt` **deixam de existir** no clone e no `remoto.git`, e não apenas ficam inalcançáveis.
+  5. Um clone novo do `remoto.git` já nasce limpo.
+  6. O `remoto.git` ganha uma trava `pre-receive` que rejeita qualquer push cujo diff novo tenha `DB_PASSWORD=` com valor, inclusive em uma **branch nova** (onde a revisão antiga é só zeros).
+- **Restrições:** sem instalar pacotes (nada de `git-filter-repo` ou BFG), sem apagar o repositório e recriá-lo do zero, e o `push` forçado deve usar a opção que não atropela commits que você não conhece.
+- **Onde pesquisar:** `man git-filter-branch` (`--tree-filter`/`--index-filter`, `--tag-name-filter`), `man git-reflog` (`expire`), `man git-gc` (`--prune`), `man git-push` (`--force-with-lease`) e `man githooks` (seção `pre-receive`).
+- **Verifique:**
+
+```bash
+cd ~/lab/vazou
+git log --all -p -S'hunter2-prod' --oneline | wc -l          # 0
+git rev-list --all --count; head -1 ~/lab/vazou-antes.txt     # os dois números iguais
+git log --all --format=%s | sort | md5sum; tail -1 ~/lab/vazou-antes.txt   # mesmo hash
+git cat-file -t v1.0                                          # tag (anotada)
+git show v1.0:config.env                                      # só PORTA=8080, sem senha
+for r in . ~/lab/remoto.git; do for b in $(cat ~/lab/blobs-vazados.txt); do
+  git -C "$r" cat-file -e "$b" 2>/dev/null && echo "EXISTE em $r" || echo "sumiu em $r"; done; done   # 4x "sumiu"
+git clone -q ~/lab/remoto.git /tmp/limpo && git -C /tmp/limpo log --all -p -S'hunter2-prod' --oneline | wc -l   # 0
+```
+
+  Teste de borda (a trava funciona e não barra o trabalho normal):
+
+```bash
+git switch -qc teste-trava && echo 'DB_PASSWORD=abc123' > novo.env && git add . && git commit -qm "teste"
+git push origin teste-trava; echo "saida=$?"                  # "remote rejected" e saida diferente de 0
+git reset -q --hard HEAD~1 && echo ok > ok.txt && git add . && git commit -qm "chore: limpo"
+git push origin teste-trava; echo "saida=$?"                  # saida=0
+```
+
 ## Erros comuns nesta fase
 
 - Commitar segredos ou arquivos gerados (`node_modules`, `*.tfstate`).

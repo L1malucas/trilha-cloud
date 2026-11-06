@@ -362,6 +362,49 @@ O `compose.override.yaml` é lido automaticamente; com `-f` explícito você ign
 
   **Verifique:** `curl -s localhost:5000/v2/_catalog` retorna `{"repositories":["trilhashop-api"]}` e `curl -s localhost:8080/saude` retorna `{"status":"ok"}`.
 
+### Desafio avançado — Imagem sem vazamento de segredo
+
+**Nível:** avançado — leva de 1 a 3 horas
+
+- **Cenário:** o build da imagem precisa baixar um `config.json` de um servidor interno que exige um token (`Authorization: Bearer ...`). Na última auditoria, o token apareceu no `docker history` de uma imagem enviada ao registry. Você vai refazer o build para que o token seja usado **durante** o build e não exista em lugar nenhum da imagem final, e provar isso de forma mecânica.
+- **Requisitos:**
+  1. Um servidor local de teste (em Python, sem instalar nada) em `127.0.0.1:8700` que devolve `{"loja":"trilha"}` em `/config.json` só com o cabeçalho `Authorization: Bearer <token>` certo (e `401` caso contrário). O token fica em `~/lab/tok.txt`.
+  2. Um `Dockerfile` que baixa o `config.json` para `/app/` durante o build **sem `ARG`, `ENV` ou `COPY` do token**, e cuja imagem final tem **menos de 30 MB**, fixa a base por **digest** (`@sha256:...`) e roda como usuário não-root.
+  3. A imagem sobe com `--read-only --cap-drop ALL` e serve o `/config.json` em `8080`, usando apenas o que a base já traz.
+  4. O arquivo do token não entra no contexto do build (nem por acidente).
+  5. Reconstruir depois de editar só um arquivo de código **reaproveita** do cache a etapa que baixa o `config.json` (e o token não precisa ser reenviado para isso).
+  6. Se o build for feito **sem** passar o segredo, ele falha cedo, com mensagem clara, e a tag não é criada.
+  7. Você prova a ausência do token com uma varredura de todas as camadas, e prova que a varredura funciona (ela **acha** o token numa imagem propositalmente ruim feita com `ARG`).
+- **Restrições:** sem login em registry, sem instalar scanners (nada de Trivy/dive) e sem `docker build --build-arg` para o token.
+- **Onde pesquisar:** documentação do Docker, *Build secrets* e `RUN --mount=type=secret`; BuildKit (`--secret id=,src=`); `docker build --network`; `docker save` (estrutura do arquivo OCI) e `.dockerignore`.
+- **Verifique:**
+
+```bash
+TOK=$(cat ~/lab/tok.txt)
+docker build --network=host --secret id=tok,src=$HOME/lab/tok.txt -t cofre:v1 . && echo build-ok
+docker image inspect cofre:v1 --format '{{.Size}}'                       # < 31457280
+grep -cE '^FROM .*@sha256:[0-9a-f]{64}' Dockerfile                        # >= 1
+docker run --rm cofre:v1 id -u                                           # diferente de 0
+docker run -d --name cofre --read-only --cap-drop ALL -p 127.0.0.1:8099:8080 cofre:v1
+sleep 1; curl -s localhost:8099/config.json; docker rm -f cofre          # {"loja":"trilha"}
+docker history --no-trunc cofre:v1 | grep -cF "$TOK"                     # 0
+rm -rf /tmp/img && mkdir /tmp/img && docker save cofre:v1 | tar -x -C /tmp/img
+grep -rlaF "$TOK" /tmp/img | wc -l                                       # 0
+# sanidade da varredura: construa antes uma cofre:ruim (com ARG) e ela PRECISA ser pega
+mkdir -p /tmp/img-ruim && docker save cofre:ruim | tar -x -C /tmp/img-ruim; grep -rlaF "$TOK" /tmp/img-ruim | wc -l   # >= 1
+```
+
+  Teste de borda (sem o segredo, e cache reaproveitado):
+
+```bash
+docker build --network=host -t cofre:semsegredo . ; echo "saida=$?"       # saida diferente de 0
+docker image inspect cofre:semsegredo >/dev/null 2>&1; echo "tag=$?"      # tag=1 (nao existe)
+echo "# mudei" >> app.txt   # ou o arquivo de codigo que voce usou
+docker build --network=host --progress=plain --secret id=tok,src=$HOME/lab/tok.txt -t cofre:v1 . 2>&1 | grep -c CACHED   # >= 1
+```
+
+> `[WSL]` Com o Docker Desktop, o `--network=host` do build pode enxergar o `localhost` da VM do Docker e não o do seu Ubuntu; nesse caso, escute em `0.0.0.0` e use `host.docker.internal` na URL. Com o Docker Engine dentro do Ubuntu, `127.0.0.1` funciona.
+
 ## Erros comuns nesta fase
 
 - `COPY . .` antes de instalar dependências (cache inútil).

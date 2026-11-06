@@ -222,6 +222,29 @@ printf 'dados/\n' > .gitignore && git add . && git commit -m "Laboratório inici
 
 `[CUSTO]` Gratuito. O disco virtual do WSL cresce conforme o uso e **não encolhe sozinho**; acompanhe o tamanho em `C:\Users\<voce>\AppData\Local\...\ext4.vhdx`.
 
+### Desafio avançado — Preflight do laboratório
+**Nível:** avançado — leva de 1 a 3 horas
+
+- **Cenário:** você vai passar o laboratório da trilha para outras pessoas do time e já viu três tipos de chamado: "systemd não sobe", "tá lento" (lab em `/mnt/c`) e "meus números não batem com os seus" (dados diferentes do `gera-lab.sh`). Em vez de responder um a um, você quer um `~/lab/preflight-wsl.sh` que qualquer pessoa rode antes de começar e que diga, de forma objetiva, se o ambiente está apto.
+- **Requisitos:**
+  1. Cada checagem imprime uma linha `OK <nome>` ou `FAIL <nome>: <motivo>`; o exit code do script é o número de `FAIL`s (0 = apto).
+  2. Confirma que o ambiente é **WSL2** (não WSL1, não um Linux comum) sem chamar nenhum `.exe` do Windows.
+  3. Confirma que o systemd é o PID 1 e que `systemctl is-system-running` devolve `running` ou `degraded`.
+  4. Confirma que o diretório do lab (argumento `$1`, padrão `~/lab`) está num filesystem Linux nativo, decidindo pelo **tipo real do mount** e não pelo prefixo `/mnt/`.
+  5. Prova a reprodutibilidade: roda o `gera-lab.sh` em dois diretórios temporários, exige que os três arquivos saiam byte a byte idênticos entre si e idênticos a um manifesto `~/lab/dados.sha256` (criado na primeira execução, validado nas seguintes).
+  6. Os diretórios temporários são removidos mesmo que o script falhe ou seja interrompido.
+- **Restrições:** sem `sudo`, sem instalar pacotes, sem chamar `.exe`; só bash e utilitários que já vêm no Ubuntu.
+- **Onde pesquisar:** `/proc/version` e `binfmt_misc` (WSLInterop); `findmnt -T`; `sha256sum -c`; `mktemp -d` com `trap`.
+- **Verifique:**
+  ```bash
+  cd ~/lab && ./preflight-wsl.sh; echo "exit=$?"                   # esperado: só linhas OK e exit=0
+  ./preflight-wsl.sh /mnt/c/Users/Public; echo "exit=$?"          # esperado: FAIL no filesystem e exit=1
+  sed -i '1s/^./0/' dados.sha256; ./preflight-wsl.sh; echo "exit=$?"   # esperado: FAIL do manifesto, exit=1
+  rm dados.sha256; ./preflight-wsl.sh >/dev/null; echo "exit=$?"  # esperado: manifesto recriado, exit=0
+  grep -c '\.exe' preflight-wsl.sh                                 # esperado: 0
+  ls -d /tmp/tmp.* 2>/dev/null | wc -l                             # esperado: 0 (nenhum temporário sobrando)
+  ```
+
 ## Erros comuns nesta fase
 
 - Trabalhar em `/mnt/c` e achar o Linux "lento".

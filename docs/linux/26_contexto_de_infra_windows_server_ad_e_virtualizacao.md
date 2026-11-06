@@ -244,6 +244,25 @@ PYX
 
   **Verifique:** `./diagnostico-identidade.sh localhost 3389; echo $?` (com o LDAP do Lab 6 rodando) imprime `OK` para a checagem de porta e termina com `0`; apontando para uma porta fechada (`./diagnostico-identidade.sh localhost 9`), imprime a falha e termina com `1`.
 
+### Desafio avançado — Provisionamento em lote e offboarding auditável no diretório
+**Nível:** avançado — leva de 1 a 3 horas
+- **Cenário:** o RH manda toda segunda-feira o `usuarios.csv` e a TI cria as contas na mão, com erros de departamento e UID duplicado. Ao mesmo tempo, a auditoria pediu evidência de que, quando alguém é desligado, a conta some **e** some de todos os grupos, com cópia do que foi removido guardada para consulta. Usando o OpenLDAP do Lab 6 como substituto do AD, automatize o ciclo completo de entrada e saída, no estilo que um servidor Linux integrado por SSSD esperaria enxergar.
+- **Requisitos:**
+  1. `provisiona.sh <csv>` cria uma OU por departamento do CSV e uma conta por linha dentro da OU do departamento, com atributos POSIX (`uidNumber` derivado do `id` do CSV a partir de 10000, `gidNumber`, `homeDirectory` e `loginShell`) e `mail` vindo do CSV.
+  2. Cada departamento tem um grupo com todos os seus membros.
+  3. O script é idempotente: uma segunda execução com o mesmo CSV não dá erro, não duplica nada e imprime quantas contas foram criadas (`0`) e quantas já existiam.
+  4. `desliga.sh <uid>` salva a entrada da conta (e a lista de grupos a que pertencia) em `auditoria/<uid>-<data>.ldif` **antes** de apagar, remove a conta e deixa nenhum grupo referenciando-a, mesmo se ela for o único membro do grupo.
+  5. Se o `uid` não existir, `desliga.sh` não altera nada e sai com código `3`.
+  6. `relatorio.sh` imprime o número de contas por departamento, ordenado do maior para o menor.
+- **Restrições:** a senha do administrador do LDAP não pode aparecer na lista de processos (`ps`) nem ser escrita em nenhum arquivo versionável; só podem ser usadas as ferramentas `ldap*` que já existem na imagem do container e utilitários do shell (módulos 04 e 11), sem instalar nada.
+- **Onde pesquisar:** `man ldapadd` (opção `-c`), `man ldapsearch` (`-LLL`, `-y`), `man ldapdelete`, `man ldapmodify` (`changetype: modify`), objectClass `posixAccount` e `groupOfNames` (RFC 2307 e o atributo obrigatório `member`).
+- **Verifique:**
+  - Depois de `./provisiona.sh ~/lab/dados/usuarios.csv`: `./relatorio.sh` soma 8 contas no total e bate com `cut -d, -f4 ~/lab/dados/usuarios.csv | tail -n +2 | sort | uniq -c | sort -rn`.
+  - Rodar de novo imprime `criadas=0` (ou equivalente) e termina com `0`; o relatório não muda.
+  - `docker exec ldap ldapsearch -x -LLL -D "cn=admin,dc=example,dc=org" -y <arquivo-de-senha> -b "dc=example,dc=org" "(uidNumber=10001)" dn | grep -c '^dn:'` imprime `1`.
+  - `./desliga.sh ana` termina com `0`; existe `auditoria/ana-*.ldif` contendo `dn: uid=ana`; a busca `(uid=ana)` devolve 0 entradas e `(member=uid=ana,*)` não devolve nenhum grupo.
+  - Borda: `./desliga.sh ninguem; echo $?` imprime `3` e o relatório continua igual; `ps -eo args | grep -c '[l]ab-troque'` imprime `0` durante a execução de `provisiona.sh` (rode num segundo terminal, em loop).
+
 ## Erros comuns nesta fase
 
 - Confundir AD DS (on-premises) com Entra ID (nuvem).

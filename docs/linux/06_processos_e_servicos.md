@@ -286,6 +286,38 @@ Cenário: você precisa rodar uma tarefa pesada uma única vez, com baixa priori
 
 **Limpeza:** `sudo systemctl disable --now ola; sudo rm /etc/systemd/system/ola.service; sudo systemctl daemon-reload`.
 
+### Desafio avançado — Serviços com sandbox e limites medidos
+**Nível:** avançado — leva de 1 a 3 horas
+
+- **Cenário:** dois jobs de terceiros vão rodar no mesmo servidor: um que vaza memória e um que consome CPU sem parar. Você precisa garantir que nenhum deles derrube a máquina, nem leia ou escreva onde não deve, e **medir** isso, sem confiar só no que diz o arquivo de unit.
+- **Requisitos:**
+  1. `hog.service` aloca memória em blocos de 8 MB sem parar e tem teto de 64 MB sem usar swap para escapar. Ao estourar, o kernel o mata (OOM do cgroup), o systemd reinicia com intervalo de 2 s e, após 3 tentativas em 60 s, ele fica `failed` por `start-limit-hit`.
+  2. `burn.service` roda um laço de CPU infinito e é limitado a 25% de **um** núcleo; o consumo medido em 10 s fica entre 20% e 30%.
+  3. `burn.service` roda sem usuário fixo (alocado dinamicamente pelo systemd), com um diretório de estado próprio gravável em `/var/lib`, enquanto `/etc` e `/usr` ficam somente leitura e `/home` inacessível para ele.
+  4. O processo do `burn` não pode ganhar privilégios novos (`setuid`, etc.) e tem `/tmp` privado.
+  5. `systemd-analyze security burn.service` reporta exposição geral abaixo de 5.0.
+- **Restrições:** os limites e o sandbox devem estar na unit (ou drop-in), não em `systemd-run` avulso; a prova de isolamento deve vir de fora do script do serviço (não vale o próprio serviço dizer que "deu erro ao escrever").
+- **Onde pesquisar:** `man systemd.resource-control` (`MemoryMax`, `MemorySwapMax`, `CPUQuota`), `man systemd.exec` (`DynamicUser`, `StateDirectory`, `ProtectSystem`, `ProtectHome`, `NoNewPrivileges`, `PrivateTmp`), `man systemd.service` (`StartLimitBurst`), `nsenter`.
+- **Verifique:**
+  > [WSL] Confirme antes que `cat /sys/fs/cgroup/cgroup.controllers` lista `cpu` e `memory`. Se não listar, pesquise `kernelCommandLine` no `.wslconfig` ou teste os limites em uma VM (Multipass).
+  ```bash
+  systemd-analyze security burn.service --no-pager | tail -1                  # exposição < 5.0
+  sudo systemctl start burn; P=$(systemctl show -p MainPID --value burn)
+  ps -o uid= -p $P | awk '{ exit !($1>=61184 && $1<=65519) }' && echo uid-dinamico
+  sudo nsenter -t $P -m -- sh -c 'touch /etc/x; touch /usr/x; ls /home; touch /var/lib/burn/ok && echo estado-ok'
+  # esperado: Read-only file system (x2), /home inacessível ou vazio, estado-ok
+  grep NoNewPrivs /proc/$P/status                                             # NoNewPrivs: 1
+  a=$(systemctl show -p CPUUsageNSec --value burn); sleep 10; b=$(systemctl show -p CPUUsageNSec --value burn)
+  echo "cpu%: $(( (b-a)/100000000 ))"                                         # entre 20 e 30
+  sudo systemctl start hog; sleep 15
+  journalctl -u hog --no-pager | grep -c 'OOM killer'                         # >= 1
+  systemctl show hog -p MemoryMax -p MemorySwapMax -p Result -p NRestarts     # 67108864, 0, start-limit-hit, >= 2
+  systemctl is-failed hog                                                     # failed
+  # Limpeza
+  sudo systemctl stop burn hog; sudo systemctl reset-failed hog
+  sudo rm /etc/systemd/system/{burn,hog}.service; sudo systemctl daemon-reload
+  ```
+
 ## Erros comuns nesta fase
 
 - Usar `kill -9` primeiro.

@@ -226,6 +226,36 @@ Resposta esperada: `5000 /dados/access.log` e depois `touch: /dados/x: Read-only
 - **Desafio 3:** repita o `docker run nginx` com `podman` rootless e compare o dono do processo (`ps -o user,pid,cmd`).
 - **Desafio 4:** suba um container Alpine com **três** limites ao mesmo tempo (memória 64 MB, 20 processos, meio núcleo de CPU) e prove os três valores lendo os arquivos do cgroup de dentro dele, sem usar `docker inspect`. **Verifique:** `docker run --rm --memory=64m --pids-limit=20 --cpus=0.5 alpine sh -c 'cat /sys/fs/cgroup/memory.max /sys/fs/cgroup/pids.max /sys/fs/cgroup/cpu.max'` deve imprimir `67108864`, `20` e `50000 100000` (o último é "cota de 50 ms a cada período de 100 ms").
 
+### Desafio avançado — Mini-runtime rootless
+
+**Nível:** avançado — leva de 1 a 3 horas
+
+- **Cenário:** o time de segurança proibiu `sudo` e o grupo `docker` nas máquinas de build, mas o pipeline ainda precisa rodar ferramentas de terceiros isoladas do resto do host: sem ver a rede, sem ver a home e sem poder estourar a memória da máquina. Você vai escrever o `~/lab/minictr.sh`, um runtime de uma página que faz o que o Docker faz, só que como usuário comum.
+- **Requisitos:**
+  1. `./minictr.sh -- COMANDO...` roda o comando **sem `sudo`** e como "root" aparente (UID 0) dentro do isolamento.
+  2. O comando é o **PID 1** do seu próprio namespace de PID, num hostname próprio (`minictr`) e numa rede sem nenhuma interface além de `lo`.
+  3. A raiz do container é um *rootfs* que **você** monta a partir de binários do próprio host (`sh`, `ls`, `cat`, `touch`, `tail`, `id`, `hostname`) e das bibliotecas que eles exigem. O `/home` do host não pode existir lá dentro, e a troca de raiz precisa ser feita de verdade, e não por `chroot` simples.
+  4. O diretório `~/lab/dados` aparece em `/dados` dentro do container, **somente leitura**.
+  5. O processo fica sob um teto de **64 MB de memória, incluindo swap**, aplicado por cgroup **sem `sudo`**.
+  6. Ao terminar (ou ao receber `Ctrl+C`), não sobra processo, ponto de montagem nem unit transitória para trás.
+- **Restrições:** nada de `sudo`, nada de instalar pacote (`busybox`, `docker`, `podman`, `debootstrap` estão fora) e nada de bibliotecas além das que o Ubuntu já traz.
+- **Onde pesquisar:** `man user_namespaces`, `man unshare` (opções `--map-root-user`, `--kill-child`), `man pivot_root`, `man systemd-run` (modo `--user`) e a seção de delegação de cgroups do systemd (`Delegate=`).
+- **Verifique:** (rode como usuário comum, de dentro de `~/lab`)
+
+```bash
+./minictr.sh -- sh -c 'echo $$; id -u; hostname'      # 1, 0 e minictr (uma por linha)
+./minictr.sh -- ls /                                  # sem 'home' na listagem; tem 'dados'
+./minictr.sh -- sh -c 'tail -n +3 /proc/net/dev | wc -l'   # 1 (só o lo)
+./minictr.sh -- sh -c 'wc -l /dados/access.log; touch /dados/x'   # 5000 ... e "Read-only file system"
+./minictr.sh -- tail /dev/zero; echo "saida=$?"       # saida diferente de 0 (tipicamente 137): morto por OOM
+pgrep -fa 'tail /dev/zero' | wc -l                    # 0: nada sobrou
+findmnt | grep -c minictr                             # 0: nenhuma montagem vazou
+```
+
+  Teste de borda: rode `./minictr.sh -- sleep 300` e, de outro terminal, dê `kill -TERM` no processo do script; em até 2 segundos `pgrep -fa 'sleep 300'` deve voltar vazio.
+
+> `[WSL]` Se `unshare --user` responder `Operation not permitted`, confira `sysctl kernel.unprivileged_userns_clone` e `kernel.apparmor_restrict_unprivileged_userns` (o Ubuntu 24.04 puro restringe; o kernel do WSL2 normalmente não). Se o systemd de usuário não estiver ativo, `systemctl --user status` te diz, e o `/etc/wsl.conf` do Módulo 00 é o primeiro suspeito.
+
 ## Erros comuns nesta fase
 
 - Achar que container é uma mini-VM com seu próprio kernel.

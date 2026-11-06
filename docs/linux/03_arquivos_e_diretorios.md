@@ -252,6 +252,41 @@ Raciocínio: arquivos vazios gastam quase zero bytes, mas cada um consome um **i
 - **Desafio 4:** em `~/lab/hl`, crie `dados.txt` com uma linha, depois dois hard links (`l1` e `l2`) para ele. Apague o `dados.txt` original e mostre que o conteúdo sobrevive e que o contador de links do arquivo caiu para 2.
   **Verifique:** `stat -c '%h' ~/lab/hl/l1 && cat ~/lab/hl/l2` deve imprimir `2` e depois a linha que você escreveu.
 
+### Desafio avançado — Deduplicador por hard link
+**Nível:** avançado — leva de 1 a 3 horas
+
+- **Cenário:** o diretório de artefatos de build guarda dezenas de versões e a maior parte dos arquivos é idêntica entre elas. O disco está apertado, mas ninguém pode perder arquivo nem mudar o caminho de nada. Você vai escrever `~/lab/dedup.sh <dir>... [--apply]`, que recupera espaço trocando duplicatas por hard links.
+- **Requisitos:**
+  1. Sem `--apply` é só relatório (dry-run): lista os grupos de duplicatas e quantos bytes seriam economizados, sem alterar nenhum inode.
+  2. Duplicata = mesmo conteúdo (compare tamanho primeiro e só então o hash ou `cmp`); arquivos vazios são ignorados.
+  3. Só une arquivos com **mesmo dono, grupo e permissões**; um arquivo com modo diferente continua independente.
+  4. Nomes com espaços e nomes começando com `-` funcionam.
+  5. A troca é segura: em nenhum momento um caminho deixa de existir (cria o link com nome temporário e substitui de forma atômica).
+  6. Duplicata em outro filesystem (outro device) não é unida: aviso no stderr, arquivo preservado, exit code 0.
+  7. Idempotente: uma segunda execução com `--apply` altera 0 arquivos e relata 0 bytes economizados.
+- **Restrições:** sem `fdupes`, `rdfind` ou qualquer pacote novo; nada de `rm` seguido de `ln` (deixaria uma janela sem o arquivo).
+- **Onde pesquisar:** `find -printf` com `%s`, `%i`, `%D`; `sort -z` e `uniq -z -w`; `ln -f` vs `mv -T`; `stat -c`.
+- **Verifique:**
+  ```bash
+  T=$(mktemp -d ~/lab/dedup.XXXX); cd "$T"; mkdir a b "c d" /dev/shm/dd
+  head -c 200000 /dev/urandom > a/x.bin
+  cp a/x.bin b/x2.bin; cp a/x.bin "c d/x 3.bin"; cp a/x.bin ./-opa.bin
+  cp a/x.bin b/priv.bin; chmod 600 b/priv.bin; cp a/x.bin /dev/shm/dd/x4.bin
+  : > a/v1; : > b/v2; printf abc > a/s1; printf abd > a/s2
+  h() { find . -type f -print0 | xargs -0 sha256sum | cut -c1-64 | sort | md5sum; }
+  antes=$(h); k1=$(du -sk . | cut -f1)
+  ~/lab/dedup.sh . /dev/shm/dd; find . -type f -links +1 | wc -l          # relatório; 0 (nada mudou)
+  ~/lab/dedup.sh . /dev/shm/dd --apply; echo "rc=$?"                       # rc=0 e aviso sobre /dev/shm
+  stat -c %i a/x.bin b/x2.bin "c d/x 3.bin" ./-opa.bin | sort -u | wc -l  # 1
+  stat -c %i b/priv.bin a/x.bin | sort -u | wc -l                          # 2 (modo diferente)
+  stat -c %i a/v1 b/v2 | sort -u | wc -l                                   # 2 (vazios ignorados)
+  [ "$antes" = "$(h)" ] && echo conteudo-intacto
+  echo "economia: $((k1 - $(du -sk . | cut -f1))) KB"                      # algo perto de 580 KB
+  ls /dev/shm/dd/x4.bin; stat -c %h /dev/shm/dd/x4.bin                     # existe, 1 link
+  ~/lab/dedup.sh . --apply                                                 # 0 arquivos alterados, 0 bytes
+  rm -rf "$T" /dev/shm/dd
+  ```
+
 ## Erros comuns nesta fase
 
 - `rm -rf` com variável vazia ou caminho errado.

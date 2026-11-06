@@ -310,6 +310,28 @@ Esperado: o tamanho no `df` passa de ~90 MB úteis para ~190 MB úteis, com os d
 - **Desafio 3:** crie um swap file, ative-o, e explique a diferença entre swap em partição e em arquivo.
 - **Desafio 4:** monte uma imagem ext4 **automaticamente** pelo `fstab` usando a opção `loop`, sem passar por `losetup` manual. **Verifique:** depois de `sudo mount -a`, o comando `findmnt -no SOURCE,FSTYPE /mnt/x` imprime algo como `/dev/loop3 ext4` (o número do loop varia); lembre de remover a linha de teste do `fstab` ao final.
 
+### Desafio avançado — Encolher um disco virtual particionado
+
+**Nível:** avançado — leva de 1 a 3 horas
+
+- **Cenário:** você herdou a imagem de uma VM (`vm.img`) com 400 MB, tabela GPT e uma única partição ext4, mas só uns 40 MB estão em uso. O storage do cliente cobra por tamanho provisionado e você precisa devolver o espaço sobrando. Na prática, encolher um disco é o inverso do que o módulo mostrou: o sistema de arquivos, a partição e o arquivo da imagem precisam encolher nessa ordem, e a tabela GPT (que tem uma cópia no fim do disco) precisa continuar válida.
+- **Requisitos:**
+  1. Criar a imagem esparsa de 400 MB com GPT e uma partição ext4 ocupando quase todo o disco, rótulo `VMDATA`, com pelo menos 30 MB de dados reais (incluindo um arquivo com buracos esparsos e um hardlink).
+  2. Registrar o `sha256sum` do conteúdo de pelo menos 3 arquivos antes de qualquer mudança.
+  3. Encolher o sistema de arquivos para perto do mínimo, a partição para caber nele com folga de 1 MiB, e a imagem para terminar logo depois da partição mais a cópia da GPT.
+  4. A tabela GPT, depois de tudo, tem de passar na verificação do `sfdisk`, sem cópia de backup fora do lugar.
+  5. O UUID e o rótulo do sistema de arquivos devem ser os mesmos de antes, e os hashes dos arquivos também.
+  6. Tudo isso empacotado num script `encolhe-disco.sh <imagem>` que recusa (status diferente de zero e mensagem clara) imagens com mais de uma partição.
+- **Restrições:** nada de `losetup`, `mount` nem `sudo` em nenhum passo do script; o tamanho final da imagem não pode passar de 80 MB.
+- **Onde pesquisar:** `man resize2fs` (`-M`, `-P`), `man sfdisk` (`--dump`, `--verify`, `last-lba`), `man debugfs` (`rdump`, `cat`), `man dd` (`skip`, `seek`, `conv=notrunc`), `man e2fsck`.
+- **Verifique:**
+  - `ls -l vm.img` mostra tamanho menor ou igual a `83886080` bytes (80 MB).
+  - `sfdisk --verify vm.img` imprime `No errors detected` e `sfdisk -l vm.img` mostra 1 partição do tipo Linux filesystem.
+  - O `e2fsck -fn` sobre o conteúdo da partição (extraído ou usando a sintaxe de offset) termina com status `0`.
+  - `debugfs -R 'cat /arquivo1' <fs> | sha256sum` bate com o hash registrado, para os 3 arquivos; o `dumpe2fs -h` (ou `blkid`) mostra o mesmo UUID e `Filesystem volume name: VMDATA`.
+  - Teste de falha: rode `./encolhe-disco.sh` numa imagem com 2 partições e confirme `echo $?` diferente de `0` e a imagem intacta (mesmo `sha256sum` de antes e depois).
+  - Teste de borda: se você truncar a imagem final 1 MiB a mais (cópia numa imagem de teste), `sfdisk --verify` ou `e2fsck` deve acusar problema, provando que o seu critério realmente detecta erro.
+
 **Limpeza (importante):**
 
 ```bash

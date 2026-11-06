@@ -270,6 +270,36 @@ O `diff -u` mostra a mudança no formato que o Git usa (`-` linha antiga, `+` li
 - **Desafio 4:** gere em `~/lab/403-por-ip.txt` a lista de IPs que receberam resposta 403, com a quantidade ao lado (no formato `quantidade ip`), do maior para o menor, usando apenas o `access.log`.
   **Verifique:** `awk '{s+=$1} END {print s}' ~/lab/403-por-ip.txt` e `grep -c ' 403 ' ~/lab/dados/access.log` devem imprimir o **mesmo número**.
 
+### Desafio avançado — Detector de rajadas em janela deslizante
+**Nível:** avançado — leva de 1 a 3 horas
+
+- **Cenário:** o time de segurança suspeita de força bruta e scraping, mas contar requisições por hora esconde as rajadas curtas: 25 requisições em 25 segundos somem numa média diária. Você vai escrever `~/lab/rajadas.sh <arquivo> <janela_s> <limite>`, que acha os IPs cuja **janela deslizante** de `janela_s` segundos chegou a `limite` requisições ou mais, em logs no formato do `access.log`.
+- **Requisitos:**
+  1. Saída em TSV: `ip<TAB>maximo<TAB>inicio_da_janela` (o início no formato original do log), um IP por linha, do maior máximo para o menor, desempate pelo IP.
+  2. Janela semiaberta: uma janela de `W` segundos que começa em `t` contém os eventos com `t <= x < t + W`.
+  3. Funciona na virada de dia **e** na virada de mês (31/Jan para 01/Feb), sem chamar `date` por linha.
+  4. Linhas fora do formato são ignoradas, sem abortar; a contagem delas vai para o stderr.
+  5. Exit code: `1` se algum IP foi apontado, `0` se nenhum, `2` para argumentos inválidos.
+  6. Uma única passada no arquivo e memória por IP limitada à janela (descarte timestamps antigos).
+- **Restrições:** use o `awk` padrão do Ubuntu (descubra qual implementação é; `mktime` e `strftime` podem não existir); sem Python, sem instalar o `gawk`.
+- **Onde pesquisar:** `readlink -f $(command -v awk)`; *days from civil* (algoritmo de data para número de dias); fila circular ou ponteiro de cabeça em `awk`; `split()` e `-v` no `awk`.
+- **Verifique:**
+  ```bash
+  f=$(mktemp)
+  for s in $(seq 50 59); do printf '10.9.9.9 - - [10/Jan/2026:23:59:%02d +0000] "GET /login HTTP/1.1" 401 10\n' $s; done > $f
+  for s in $(seq 0 14);  do printf '10.9.9.9 - - [11/Jan/2026:00:00:%02d +0000] "GET /login HTTP/1.1" 401 10\n' $s; done >> $f
+  echo 'lixo sem formato' >> $f
+  printf '10.7.7.7 - - [11/Jan/2026:12:00:00 +0000] "GET / HTTP/1.1" 200 1\n10.7.7.7 - - [11/Jan/2026:12:05:00 +0000] "GET / HTTP/1.1" 200 1\n' >> $f
+  for s in $(seq 40 59); do printf '10.8.8.8 - - [31/Jan/2026:23:59:%02d +0000] "GET /a HTTP/1.1" 200 1\n' $s; done >> $f
+  for s in $(seq 0 4);   do printf '10.8.8.8 - - [01/Feb/2026:00:00:%02d +0000] "GET /a HTTP/1.1" 200 1\n' $s; done >> $f
+  ~/lab/rajadas.sh $f 60 20; echo "rc=$?"     # 10.8.8.8 25 31/Jan/2026:23:59:40, 10.9.9.9 25 10/Jan/2026:23:59:50; stderr: 1 linha ignorada; rc=1
+  ~/lab/rajadas.sh $f 20 20 | cut -f1,2        # os dois IPs com 20 (testa a janela semiaberta)
+  ~/lab/rajadas.sh $f 20 21; echo "rc=$?"      # vazio, rc=0
+  ~/lab/rajadas.sh ~/lab/dados/access.log 60 20; echo "rc=$?"   # vazio, rc=0
+  ~/lab/rajadas.sh $f abc 3; echo "rc=$?"      # rc=2
+  time ~/lab/rajadas.sh ~/lab/dados/access.log 3600 1 >/dev/null   # bem abaixo de 1 s
+  ```
+
 ## Erros comuns nesta fase
 
 - Usar `uniq` sem `sort` antes.

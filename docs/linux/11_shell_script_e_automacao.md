@@ -364,6 +364,29 @@ Esperado: A começa, B imprime `B: já em execução, saindo` e só A termina. R
 - **Desafio 3:** rode `shellcheck` em todos os seus scripts e corrija **todas** as advertências.
 - **Desafio 4:** faça o `bkp.sh` ser seguro contra execução dupla: usar `flock`, e não duplicar o backup do mesmo dia (nome sem hora, falha limpa se já existir). **Verifique:** depois de rodar o script duas vezes seguidas, `ls ~/backups/bkp-dados-$(date +%Y%m%d)* | wc -l` imprime `1`.
 
+### Desafio avançado — Executor de jobs paralelo e resiliente
+
+**Nível:** avançado — leva de 1 a 3 horas
+
+- **Cenário:** a equipe tem uma lista de tarefas de manutenção (compactar logs, validar backups, chamar health checks) que hoje roda uma depois da outra e leva horas. Você precisa de um `runjobs.sh` que leia um arquivo com um comando por linha e rode até N em paralelo, sem derrubar o servidor. Tarefas que travam têm de ser mortas, tarefas que falham de forma intermitente têm de ser repetidas, e se alguém apertar `Ctrl+C` ou mandar `SIGTERM`, nenhum processo filho pode ficar órfão.
+- **Requisitos:**
+  1. `runjobs.sh -j N -t SEG -r TENTATIVAS arquivo_de_jobs` roda no máximo `N` jobs simultâneos (comprove o pico com um contador, não com a impressão visual).
+  2. Cada job tem tempo-limite de `SEG` segundos; ao estourar, o job e todos os seus subprocessos morrem e contam como falha com código `124`.
+  3. Falhas são repetidas até `TENTATIVAS` vezes, com espera crescente entre tentativas (1 s, 2 s, 4 s...).
+  4. Ao final, um resumo com contagem de `ok`, `falhou` e `timeout`, e o script sai com `0` somente se todos deram certo; caso contrário, sai com o número de jobs que falharam (limitado a 125).
+  5. Um `SIGINT` ou `SIGTERM` no script interrompe tudo: nenhum filho continua rodando depois, e o status de saída é `130` ou `143` respectivamente.
+  6. O arquivo de resultados (`resultado.tsv`, com job, status e duração em segundos) nunca fica com linhas misturadas, mesmo com vários jobs terminando juntos.
+- **Restrições:** só bash e utilitários do coreutils/util-linux presentes no Ubuntu; sem `xargs -P`, sem GNU `parallel` e sem `&` solto sem controle (nada de loop que dispara tudo e só depois espera).
+- **Onde pesquisar:** `help wait` (opção `-n`), `man bash` (seções *Job Control*, *Process Substitution* e `exec {fd}<>`), `man mkfifo`, `man timeout` (`-k`, `--foreground`), `man setsid`, `man flock`.
+- **Verifique:**
+  - Com 10 jobs `sleep 2` e `-j 3`, o tempo total medido por `time` fica entre 7 e 9 segundos (4 ondas), e um pico de concorrência registrado em arquivo por cada job (por exemplo, contando arquivos de um diretório de trava) nunca passa de `3`.
+  - Um job `sleep 30` com `-t 2 -r 1` termina em cerca de 2 s (mais a espera de repetição), aparece como `timeout` no resumo e `pgrep -f 'sleep 30'` não retorna nada depois.
+  - Um job `sh -c 'sleep 30 & wait'` com `-t 2` também não deixa o `sleep` filho vivo (`pgrep sleep` vazio).
+  - Um job que falha nas 2 primeiras vezes e passa na 3.ª (use um arquivo-contador) com `-r 3` termina como `ok`, e as tentativas ficam separadas por pelo menos 1 s e 2 s no registro.
+  - `resultado.tsv` com 50 jobs curtos e `-j 10` tem exatamente 50 linhas, todas com 3 campos (`awk -F'\t' 'NF!=3' resultado.tsv | wc -l` imprime `0`).
+  - Teste de falha: inicie o script com jobs longos, mande `kill -TERM` ao PID dele, e confirme `echo $?` igual a `143` e nenhum `sleep` restante em `pgrep`.
+  - `shellcheck runjobs.sh` sem advertências.
+
 ## Erros comuns nesta fase
 
 - Esquecer as aspas em variáveis.

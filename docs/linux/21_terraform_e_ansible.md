@@ -454,6 +454,25 @@ terraform destroy -auto-approve
 
   **Verifique:** a 1ª execução mostra `changed=1` e a 2ª `changed=0`; `grep -E '^PermitRootLogin' ~/lab/sshd_config` imprime `PermitRootLogin no`.
 
+### Desafio avançado — Refatorar IaC sem destruir nada
+**Nível:** avançado — leva de 1 a 3 horas
+- **Cenário:** o time começou o `tf-ambientes` (Lab 6) com `count` sobre uma lista de serviços (`api`, `web`, `worker`), e os arquivos `.conf` já estão em uso por outros sistemas. Agora a lista vai ganhar e perder itens no meio, e `count` reindexaria tudo. Você precisa migrar para chaves estáveis **sem recriar nenhum arquivo** (nem mexer no mtime deles) e deixar a regra de negócio testada, de modo que ninguém quebre isso num PR futuro.
+- **Requisitos:**
+  1. Projeto inicial com `local_file` usando `count` e `terraform apply` já feito (3 arquivos criados).
+  2. Migrar para `for_each` indexado pelo nome do serviço, de forma que o `plan` da migração mostre `0 to destroy` e nenhum recurso `will be created`/`replaced`.
+  3. O bloco de migração fica versionado no código (não vale `terraform state mv` manual e não vale editar o `.tfstate`).
+  4. Uma validação rejeita nomes de serviço duplicados ou fora do padrão `^[a-z][a-z0-9-]{1,19}$`.
+  5. Uma suíte de testes nativa do Terraform, sem tocar em arquivos reais, prova que o conteúdo gerado de cada serviço está correto e que uma entrada inválida é rejeitada.
+  6. Um hook do Git (módulo 19) bloqueia o commit se `terraform fmt` ou a suíte de testes falhar.
+- **Restrições:** apenas o provider `local`; sem recriar nada; sem editar o state na mão.
+- **Onde pesquisar:** `moved` block (refactoring), `terraform test` (`run`, `command = plan`, `expect_failures`), `validation` com `regex`/`alltrue`, `githooks`.
+- **Verifique:**
+  - Antes da migração: `stat -c '%n %i %Y' saida/*.conf > antes.txt`. Depois de migrar e aplicar: `stat -c '%n %i %Y' saida/*.conf | diff - antes.txt && echo IGUAL` imprime `IGUAL`.
+  - `terraform plan -no-color | grep -cE 'will be (destroyed|created|replaced)'` imprime `0` (rode antes de aplicar a migração).
+  - `terraform state list` mostra `local_file.conf["api"]`, `local_file.conf["web"]` e `local_file.conf["worker"]` (sem índices numéricos).
+  - `terraform test` termina com `Success!` e `0 failed`, e existe pelo menos uma `run` com `expect_failures` para a entrada inválida.
+  - Borda: `terraform plan -var 'servicos=["api","api"]'` falha com `Invalid value for variable`; e `echo 'variable  "x" {}' >> main.tf && git commit -am teste` é recusado pelo hook (exit diferente de 0), enquanto o commit do código correto passa.
+
 **Limpeza:** `terraform destroy` em cada projeto; `docker rm -f` dos containers de teste.
 
 ## Erros comuns nesta fase

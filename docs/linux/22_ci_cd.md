@@ -312,6 +312,24 @@ concurrency:
 
   **Verifique:** `docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint:latest; echo $?` termina com `0` e sem nenhuma linha de erro.
 
+### Desafio avançado — Canary com rollback automático por taxa de erro
+**Nível:** avançado — leva de 1 a 3 horas
+- **Cenário:** o time de pagamentos não aceita mais blue/green "tudo ou nada": cada release nova deve receber só uma fatia do tráfego, e se a versão nova começar a errar, o rollback precisa acontecer sozinho, sem ninguém olhando o terminal e sem derrubar requisições em andamento. Você vai montar o mecanismo localmente com containers, como um mini pipeline de entrega progressiva.
+- **Requisitos:**
+  1. Uma borda Nginx com dois backends (`estavel` e `canario`, ambos Nginx servindo respostas que identificam a versão) e um peso configurável para o canário.
+  2. Um script `promove.sh <percentual>` que reescreve o peso e recarrega a borda sem derrubar conexões.
+  3. A borda registra num log próprio, por requisição, qual backend atendeu e o status devolvido pelo backend (não só o status final).
+  4. Um script `guarda.sh` que, depois de gerar 500 requisições, calcula a taxa de erro (status 5xx) **só do canário** a partir do log e, se passar de 5%, volta o peso do canário para 0 automaticamente e sai com código `2`.
+  5. Com 10% de peso e 1000 requisições, o canário recebe entre 7% e 13% do tráfego.
+  6. Durante o rollback automático, nenhuma requisição de um loop contínuo de `curl` recebe erro de conexão.
+- **Restrições:** sem Kubernetes, sem service mesh e sem instalar nada além de containers `nginx:1.27`; o cálculo da taxa deve ser feito com ferramentas de texto do módulo 04, nunca "de olho".
+- **Onde pesquisar:** `ngx_http_upstream_module` (`weight`), `split_clients`, `log_format` com `$upstream_addr` e `$upstream_status`, `nginx -s reload` (graceful), `return` em `location`.
+- **Verifique:**
+  - Com canário saudável e `./promove.sh 10`, depois `for i in $(seq 1000); do curl -s localhost:8097; done | sort | uniq -c` mostra duas linhas e a do canário entre 70 e 130.
+  - Com o canário trocado por uma versão que responde `return 500;`, `./guarda.sh; echo $?` imprime a taxa medida e `2`, e logo depois `./promove.sh --status` (ou o arquivo de config) mostra peso `0`.
+  - Em outro terminal, `while :; do curl -s -o /dev/null -w '%{http_code}\n' localhost:8097; done | sort | uniq -c` rodando durante o rollback não contém código `000`.
+  - Borda: com o canário saudável, `./guarda.sh; echo $?` imprime `0` e o peso permanece em 10; com menos de 500 linhas de log do canário, o script recusa decidir (saída diferente de `0` e `2`) em vez de aprovar por falta de dados.
+
 ## Erros comuns nesta fase
 
 - Reconstruir o artefato em cada ambiente em vez de promover o mesmo.

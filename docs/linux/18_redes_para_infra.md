@@ -269,6 +269,40 @@ O `sleep 7` não é decoração: o HAProxy só marca o backend como fora depois 
 - **Desafio 3:** explique, camada por camada, tudo que acontece quando você digita `https://exemplo.com` no navegador (DNS, TCP, TLS, HTTP).
 - **Desafio 4:** emita, com a CA do Lab 3, um certificado válido para **dois** nomes (`app.lab` e `www.app.lab`) e prove que o `curl` aceita os dois nomes apontando para o seu Nginx (use `--resolve` ou entradas no `/etc/hosts`), mas rejeita um terceiro nome (`outro.lab`). **Verifique:** `openssl x509 -in ~/lab/ca/servidor.crt -noout -ext subjectAltName` mostra `DNS:app.lab, DNS:www.app.lab`; `curl --cacert ~/lab/ca/ca.crt https://www.app.lab/` responde normalmente e, com o terceiro nome, termina com `curl: (60) SSL: no alternative certificate subject name matches target host name 'outro.lab'`.
 
+### Desafio avançado — Dois provedores, uma saída por política
+
+**Nível:** avançado — leva de 1 a 3 horas
+
+- **Cenário:** a empresa contratou dois links de internet (ISP A, barato, e ISP B, mais caro e com melhor rota para HTTPS alternativo). Regra de negócio: o tráfego comum sai pelo ISP A, e o serviço na porta `8443` **sempre** pelo ISP B. Se um provedor ficar "de pé, mas sem entregar", o tráfego dele deve migrar para o outro automaticamente. Antes de mexer no roteador real, você prova tudo com namespaces.
+- **Requisitos:**
+  1. Quatro namespaces: `cli`, `rtr`, `ispa`, `ispb`. Endereçamento fixo: `cli`-`rtr` em `10.50.0.0/24` (cli `.2`, rtr `.1`); `rtr`-`ispa` em `100.64.1.0/30` (rtr `.1`, isp `.2`); `rtr`-`ispb` em `100.64.2.0/30` (rtr `.1`, isp `.2`).
+  2. A "internet" é o endereço `192.0.2.10/32`, configurado no `lo` de **ambos** os ISPs. Em cada um, um servidor responde nas portas `80` e `8443` com `isp-a <IP-do-cliente>` ou `isp-b <IP-do-cliente>`.
+  3. O `rtr` encaminha e faz NAT (masquerade) em cada uplink, só com `nft`. O ISP precisa ver o IP do uplink do `rtr`, nunca `10.50.0.2`.
+  4. **Roteamento por política:** pacotes do `cli` com destino à porta `8443` saem pelo ISP B; todo o resto sai pelo ISP A. Isso deve ser feito com marcação de pacote (`nft`) e tabelas de roteamento separadas (`ip rule`), sem `iptables`.
+  5. `failover.sh` (idempotente): sonda de verdade a alcançabilidade de `192.0.2.10` por cada uplink (e não só o estado do link) e ajusta a política para que, se um ISP não entregar, **todo** o tráfego use o outro; quando ele voltar, a política original é restaurada.
+  6. `teardown.sh` remove tudo (namespaces, regras) e pode ser rodado duas vezes seguidas sem erro.
+- **Restrições:** sem `iptables`, sem instalar pacotes além do que o Ubuntu 24.04 já tem, e nenhuma rota estática "para o servidor específico" no `cli` (a decisão é do `rtr`).
+- **Onde pesquisar:** `man ip-rule`, `man ip-route` (tabelas, `fwmark`), `nft` (wiki oficial, hooks `prerouting` e `meta mark set`), `man curl` (`--interface`) e o parâmetro `rp_filter` em `ip-sysctl` do kernel.
+- **Verifique:**
+
+```bash
+C='sudo ip netns exec cli curl -s --max-time 3'
+$C http://192.0.2.10/                  # isp-a 100.64.1.1
+$C http://192.0.2.10:8443/             # isp-b 100.64.2.1
+sudo ip netns exec rtr ip rule show | grep -c fwmark    # >= 1
+sudo ip netns exec rtr nft list ruleset | grep -c masquerade   # >= 2
+# falha silenciosa do ISP A (link continua UP):
+sudo ip -n ispa addr del 192.0.2.10/32 dev lo && sudo ./failover.sh
+$C http://192.0.2.10/                  # isp-b 100.64.2.1
+# recuperação:
+sudo ip -n ispa addr add 192.0.2.10/32 dev lo && sudo ./failover.sh
+$C http://192.0.2.10/                  # isp-a 100.64.1.1
+sudo ./failover.sh; echo "saida=$?"    # idempotente: saida=0 sem mudar nada
+sudo ./teardown.sh && sudo ./teardown.sh; echo "saida=$?"; ip netns list | wc -l   # saida=0 e 0
+```
+
+  Teste de borda: com **os dois** ISPs sem o endereço (`ip -n ispa addr del ...` e `ip -n ispb addr del ...`), o `failover.sh` deve sair com código diferente de zero e o `curl` deve terminar em *timeout* (e não ficar pendurado: lembre do `--max-time`).
+
 ## Erros comuns nesta fase
 
 - Esquecer de descontar rede/broadcast (e reservados da nuvem) no cálculo de hosts.

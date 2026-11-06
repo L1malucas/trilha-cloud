@@ -94,6 +94,27 @@ Cada desafio cruza vários módulos e simula um pedido real de trabalho. Faça n
 
   **Verifique:** `time make up && make test; echo $?` conclui com `0` sem nenhuma pergunta interativa, e `git status --porcelain | wc -l` imprime `0` (nada ficou fora do repositório).
 
+### Desafio avançado — Release com portão de SLO: promover, medir e reverter sozinho
+**Nível:** avançado — leva de 1 a 3 horas (ou mais: é o mais exigente da trilha)
+- **Cenário:** o TrilhaShop foi para o ar e o negócio agora cobra um requisito não funcional com número: **99,5% de sucesso** para o cliente, **p95 abaixo de 300 ms** e **zero requisições perdidas durante um deploy**. Ninguém mais pode "soltar versão e torcer". Você vai estender o projeto com um comando único de release que constrói, verifica a segurança, promove a versão em rolling update **sob carga**, mede o resultado no Prometheus e decide sozinho entre manter ou reverter, deixando um registro auditável da decisão no Git.
+- **Requisitos:**
+  1. `make release VERSION=vN` constrói a imagem da API com tag imutável derivada do commit (nunca `latest`), carrega no cluster e só segue adiante se `gitleaks` e `trivy` (falhando em `CRITICAL`) passarem.
+  2. A promoção é um rolling update que nunca fica abaixo do número de réplicas prontas atual; um gerador de carga contínuo (script seu, no shell) roda durante todo o deploy e registra total de requisições e falhas, com meta de **0 falhas** em pelo menos 3000 requisições.
+  3. Após o rollout, o script espera uma janela de observação (configurável) e consulta a **API do Prometheus** (não o gerador de carga) para calcular a taxa de 5xx e a latência p95 da nova versão nessa janela.
+  4. Se a taxa de 5xx passar do orçamento do SLO de 99,5% **ou** o p95 passar de 300 ms, o script executa `rollout undo`, confirma que a versão anterior voltou e sai com código `2`; caso contrário sai com `0`.
+  5. Toda release (aprovada ou revertida) gera `docs/releases/vN.md` com commit, tag da imagem, resultado, números medidos e horário, é commitada automaticamente e recebe uma tag Git `release/vN`.
+  6. O workflow `.github/workflows/release.yml` espelha o mesmo fluxo (build, scan, deploy com `environment` e aprovação), com `permissions` mínimas, e passa no `actionlint`.
+  7. Uma versão `vBAD` deliberadamente defeituosa (por exemplo, devolve 500 em 20% das chamadas) é bloqueada pelo portão sem intervenção humana.
+- **Restrições:** tudo reproduzível a partir do repositório em uma distro WSL nova (sem passos manuais); sem segredos no Git; o gerador de carga e as consultas ao Prometheus devem usar só `curl`, shell e `python3` da biblioteca padrão, sem instalar ferramentas de carga; cada decisão de bloqueio deve aparecer no relatório com o número que a causou.
+- **Onde pesquisar:** `kubectl rollout status/undo` e `kubectl get deploy -o jsonpath`, `xargs -P` (carga paralela), `curl -w` (`%{http_code}`, `%{time_total}`), API HTTP do Prometheus (`/api/v1/query`, `histogram_quantile`, `increase`), `git tag -a`, `make` (variáveis e alvos `.PHONY`).
+- **Verifique:**
+  - `make release VERSION=v2; echo $?` termina com `0`; `kubectl get deploy api -o jsonpath='{.spec.template.spec.containers[0].image}'` termina com a tag derivada do commit (sem `latest`); `git tag -l 'release/*'` lista `release/v2`; `docs/releases/v2.md` existe e contém a taxa de 5xx e o p95 medidos.
+  - O log da carga durante o deploy termina com algo como `total=N falhas=0` com N maior ou igual a 3000.
+  - `make release VERSION=vBAD; echo $?` imprime `2`, o `docs/releases/vBAD.md` registra `REVERTIDA` com o motivo (taxa de 5xx ou p95) e `kubectl get deploy api -o jsonpath='{.spec.template.spec.containers[0].image}'` volta a mostrar a imagem da `v2`.
+  - Segurança: planta-se uma chave falsa num arquivo e `make release VERSION=v3` aborta **antes** de qualquer `kubectl` com código diferente de `0` e mensagem do gitleaks; o cluster permanece na versão anterior.
+  - Idempotência e reprodutibilidade: rodar `make release VERSION=v2` de novo não cria tag duplicada nem falha (informa que a versão já foi liberada), e `docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint:latest; echo $?` imprime `0`.
+  - `git status --porcelain | wc -l` imprime `0` ao final (tudo registrado no repositório).
+
 ## Preparação para certificações
 
 A trilha cobre bases de várias provas. Use o quadro para planejar **uma de cada vez**:

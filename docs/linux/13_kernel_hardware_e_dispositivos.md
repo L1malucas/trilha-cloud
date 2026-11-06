@@ -198,6 +198,29 @@ Explique, com suas palavras, por que `MemAvailable` é a métrica correta e `Mem
 - **Desafio 3:** numa VM Linux real (ou container privilegiado), carregue o módulo `dummy`, crie a interface `dummy0` com `ip link add` e remova.
 - **Desafio 4:** crie `/etc/sysctl.d/97-desafio.conf` com `vm.swappiness = 15` e `net.ipv4.ip_forward = 1`, aplique **sem reiniciar** e prove os dois valores direto em `/proc/sys`, depois desfaça tudo (arquivo e valores em execução). **Verifique:** `sysctl -n vm.swappiness net.ipv4.ip_forward` deve imprimir `15` e `1` (um por linha) antes do desfazer; depois do desfazer, `ls /etc/sysctl.d/97-desafio.conf` deve responder `No such file or directory`.
 
+### Desafio avançado — Um `top` com portas, feito só com `/proc`
+
+**Nível:** avançado — leva de 1 a 3 horas
+
+- **Cenário:** durante um incidente, o servidor está tão ruim que `ps`, `top`, `ss` e `lsof` não estão instalados (imagem mínima de container) e você não pode instalar nada. Mesmo assim o time precisa saber, em segundos, quais processos estão consumindo CPU agora, quanta memória cada um segura e qual porta TCP cada um mantém aberta. O kernel já tem todos esses dados; falta lê-los do jeito certo. Você vai escrever o `proctop.sh`, que faz isso usando só o que o kernel expõe.
+- **Requisitos:**
+  1. Mostrar, para os 5 processos que mais usaram CPU, em uma janela de medição de 2 segundos: PID, nome, `%CPU` calculado pela diferença de tempo de CPU entre duas leituras, RSS em MB, número de threads e `oom_score`.
+  2. Converter ticks em segundos usando o valor real do sistema, não um número fixo no código.
+  3. Para cada um desses processos, listar as portas TCP em `LISTEN`, descobertas ligando os arquivos de socket em `/proc/<PID>/fd` à tabela de sockets do kernel (portas em hexadecimal, inode como elo).
+  4. Funcionar quando o nome do processo tem espaços e parênteses (por exemplo, um binário copiado como `/tmp/meu ) proc`).
+  5. Não quebrar nem imprimir erros quando um processo some entre as duas leituras, nem quando não há permissão de leitura de `/proc/<PID>/fd` de outro usuário (mostrar `?` nas portas nesse caso).
+  6. Terminar com status `0` e levar menos de 4 segundos no total.
+- **Restrições:** não usar `ps`, `top`, `pidstat`, `ss`, `netstat`, `lsof`, `fuser`, `pgrep` nem `systemd-cgtop`; só bash, coreutils, `awk`/`sed`/`grep` e `getconf`; sem root.
+- **Onde pesquisar:** `man 5 proc` (seções `/proc/[pid]/stat`, `/proc/[pid]/statm`, `/proc/[pid]/fd`, `/proc/net/tcp`, `/proc/[pid]/oom_score`), `man getconf` (`CLK_TCK`), `man 3 sysconf`, e como o `ps` calcula `%cpu` (`man ps`, seção *PROCESS FLAGS* e *CODE* de `pcpu`).
+- **Verifique:**
+  - Com `yes >/dev/null &` rodando, `./proctop.sh` coloca o `yes` em primeiro lugar com `%CPU` entre `90` e `105`, e `kill %1` o retira da lista na execução seguinte.
+  - Com `python3 -m http.server 7788 >/dev/null 2>&1 &`, a linha desse processo mostra `7788` nas portas, e `ss -ltnp | grep 7788` (somente para conferir, fora do script) confirma o mesmo PID.
+  - `cp /bin/sleep "/tmp/meu ) proc" && "/tmp/meu ) proc" 300 &` aparece com o nome inteiro correto na saída, sem colunas deslocadas (`awk '{print NF}'` é o mesmo nas 5 linhas se você usar um separador de campos fixo, como tab).
+  - Para o RSS, a diferença para `ps -o rss= -p <PID>` fica abaixo de 1 MB para o mesmo processo.
+  - Teste de falha: rode `./proctop.sh 2>&1 >/dev/null | wc -l` com vários processos de outros usuários na máquina (por exemplo `root`) e confirme que imprime `0` linhas de erro e `echo $?` é `0`.
+  - Teste de corrida: rode em loop `for i in $(seq 20); do sleep 0.05 & done` junto do `proctop.sh`, 10 vezes seguidas, sem nenhuma mensagem de erro em stderr.
+  - `time ./proctop.sh` marca menos de 4 s.
+
 ## Erros comuns nesta fase
 
 - Esperar hardware real no WSL (PCI/USB aparecem vazios).

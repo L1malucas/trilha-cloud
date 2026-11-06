@@ -261,6 +261,36 @@ Para cada item: **sintoma → hipótese → comandos → causa raiz → correç�
 - **Desafio 4 (quebre e recupere: módulos 05, 11 e 15):** crie o repositório `~/lab/runbook-demo` com um `relatorio.sh` que imprime `linhas ERROR: N` contando com `grep -c ERROR ~/lab/dados/app.log`, e faça o commit inicial. Depois sabote o script de **três formas, uma de cada vez**: remova o bit `x`, converta para CRLF e faça `chmod 000` no `app.log`. Para cada falha, aplique o método (sintoma, hipótese, teste, correção) e faça um commit com a correção. **Verifique:** `cd ~/lab/runbook-demo && ./relatorio.sh | grep -c 'linhas ERROR:'` deve imprimir `1`, e `git log --oneline | wc -l` deve imprimir `4`.
 - **Desafio 5 (quebre e recupere: módulos 03, 08 e 12):** faça `sudo cp /etc/fstab /etc/fstab.bak` na distro **de laboratório**, acrescente a linha `/dev/sdz9 /mnt/fantasma ext4 defaults 0 2` ao `/etc/fstab` e rode `sudo mount -a`. Leia o erro inteiro, descubra pelo `journalctl` ou `dmesg` o que o sistema registrou, e recupere de **duas** maneiras: restaurando o backup e, noutra rodada, mantendo a linha mas tornando-a inofensiva com `nofail`. **Verifique:** `sudo mount -a; echo $?` deve imprimir `0` ao final de cada uma das duas rodadas (e diferente de zero, tipicamente `32`, antes de corrigir).
 
+### Desafio avançado — Falha em cadeia: três causas, um mesmo 404
+
+**Nível:** avançado — leva de 1 a 3 horas
+
+- **Cenário:** a sexta-feira terminou com o site fora do ar: o `curl` no Nginx dá `502`. Ao consertar isso, o erro vira `404`; ao consertar de novo, continua `404`, só que por outro motivo. Para treinar esse tipo de incidente encadeado, você mesmo monta a stack saudável, escreve o sabotador que injeta as três falhas de camadas diferentes, e depois resolve com o método do módulo, **uma mudança por vez**, documentando tudo.
+- **Requisitos:**
+  1. **Baseline saudável:** uma imagem ext4 de 20 MB em loop (`~/lab/cad.img`) montada em `/srv/cad` **via `/etc/fstab`**; um serviço systemd `app-cad` (como seu usuário) servindo `/srv/cad` na porta `5001`; o Nginx em `8088` fazendo proxy para ela. `curl -s localhost:8088/health.txt` devolve `ok`.
+  2. **`saude.sh`:** script que sai com `0` só se tudo está bem e, quando falha, diz **qual camada** quebrou (Nginx, serviço, montagem ou permissão) usando sondas independentes, e não só o código HTTP final.
+  3. **`sabota.sh`:** injeta, de uma vez, estas três falhas, sem apagar nenhum arquivo do baseline: (a) o Nginx aponta o `proxy_pass` para a porta errada, de modo que `nginx -t` **passa** e só o tráfego real falha; (b) `/srv/cad` fica desmontado e o serviço continua `active` olhando para um diretório vazio; (c) quando a imagem voltar a ser montada, a raiz dela pertence a `root` com modo `0700`.
+  4. **Diagnóstico:** conserte uma falha de cada vez, só com evidência (nunca "reiniciar para ver"), e registre em `~/lab/incidente/incidente.md` três seções `## Falha N` com sintoma, comando que provou a causa, correção e prevenção.
+  5. **Prevenção da (b):** depois de `systemctl stop app-cad` e `umount /srv/cad`, um simples `systemctl start app-cad` deve **remontar a imagem sozinho**.
+  6. **Prevenção da (a):** o seu passo de deploy do Nginx (um `deploy-nginx.sh`) só recarrega se `nginx -t` passar **e** uma sonda real ao upstream responder `200`; caso contrário, restaura a configuração anterior e sai com erro.
+- **Restrições:** nada de recriar o ambiente do zero para "consertar", e o `/etc/fstab` precisa continuar passando em `findmnt --verify` sem erros.
+- **Onde pesquisar:** `man systemd.unit` (`RequiresMountsFor=`), `man findmnt` (`--verify`, `--target`), `man systemd-analyze` (`verify`), `man strace` (`-e trace=`) e `man nginx` (opção `-t` e `-T`).
+- **Verifique:**
+
+```bash
+~/lab/saude.sh; echo "saida=$?"                      # baseline: saida=0
+~/lab/sabota.sh && ~/lab/saude.sh; echo "saida=$?"    # saida diferente de 0 e a camada apontada (nginx)
+curl -s -o /dev/null -w '%{http_code}\n' localhost:8088/health.txt   # 502, depois da correção (a): 404
+# ...ao final das três correções:
+curl -s localhost:8088/health.txt                     # ok
+grep -c '^## Falha' ~/lab/incidente/incidente.md      # 3
+findmnt --verify 2>&1 | grep -ciE 'error'             # 0
+sudo systemctl stop app-cad && sudo umount /srv/cad && sudo systemctl start app-cad
+findmnt -n /srv/cad && curl -s localhost:8088/health.txt          # montado e "ok"
+```
+
+  Teste de borda: estrague de propósito o `deploy-nginx.sh` apontando para uma porta sem serviço; ele deve terminar com código diferente de zero e `diff` entre a configuração ativa e a anterior deve ser vazio (rollback feito).
+
 ## Erros comuns nesta fase
 
 - Mudar várias coisas ao mesmo tempo (e não saber qual resolveu).

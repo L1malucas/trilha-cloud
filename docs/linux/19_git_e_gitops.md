@@ -234,6 +234,42 @@ git switch -q main && git stash pop
 
   **Verifique:** o bisect termina com `<hash> is the first bad commit` apontando para o commit 13 (confira com `git log --oneline | sed -n '8p'`, já que o log lista do mais novo para o mais antigo).
 
+### Desafio avançado — Agente GitOps que só confia em commit assinado
+
+**Nível:** avançado — leva de 1 a 3 horas
+
+- **Cenário:** você vai construir, em miniatura, o que o Argo CD e o Flux fazem. O "cluster" é a pasta `~/lab/gitops/estado`; a fonte da verdade é um repositório bare. O time de segurança exige que o agente aplique **apenas** commits assinados por chaves autorizadas e que qualquer alteração manual no "cluster" (drift) seja desfeita sozinha na próxima rodada.
+- **Requisitos:**
+  1. `~/lab/gitops/fonte.git` (bare) com um diretório `app/` contendo `config.env` e `replicas.txt`. Os commits legítimos são assinados com **chave SSH** (`ed25519`), e as chaves autorizadas ficam num arquivo `allowed_signers`.
+  2. `reconcilia.sh` clona/atualiza um cache local, verifica a assinatura do **commit da ponta** da `main` e, se válida, faz `estado/` ficar **idêntico** a `app/` (arquivos extras são removidos) e grava a revisão aplicada em `estado/.revisao`.
+  3. **Idempotente:** uma segunda rodada, sem commits novos, não reescreve nenhum arquivo (o `mtime` de `estado/app/config.env` não muda).
+  4. **Drift:** se alguém editar um arquivo ou criar um arquivo extra em `estado/`, a rodada seguinte restaura o estado do repositório e registra no journal (`logger -t reconcilia`) quantos arquivos foram corrigidos.
+  5. **Rejeição:** commit na ponta não assinado, ou assinado por uma chave que não está em `allowed_signers`, **não** é aplicado: o estado fica como estava, o script sai com código `3` e o journal recebe uma linha `REJEITADO <hash>`.
+  6. **Rollback:** um `git revert` assinado do commit ruim, publicado em cima dele, faz o agente convergir de volta ao conteúdo anterior.
+- **Restrições:** sem Argo CD, Flux ou qualquer ferramenta extra, sem GPG (use a assinatura SSH nativa do Git) e sem `git push --force` em nenhum momento.
+- **Onde pesquisar:** `man git-config` (`gpg.format`, `user.signingkey`, `gpg.ssh.allowedSignersFile`, `commit.gpgsign`), `man git-verify-commit`, `man ssh-keygen` (seção `ALLOWED SIGNERS`) e `man logger`.
+- **Verifique:**
+
+```bash
+cd ~/lab/gitops
+./reconcilia.sh; cat estado/.revisao; git -C fonte.git rev-parse main          # os dois hashes iguais
+A=$(stat -c %Y estado/app/config.env); sleep 1; ./reconcilia.sh; B=$(stat -c %Y estado/app/config.env)
+[ "$A" = "$B" ] && echo idempotente
+echo hack >> estado/app/config.env; touch estado/extra.txt; ./reconcilia.sh
+test ! -e estado/extra.txt && echo extra-removido
+diff <(git -C fonte.git show main:app/config.env) estado/app/config.env && echo config-restaurado
+journalctl -t reconcilia --since '-1min' --no-pager | grep -ci 'drift'          # >= 1
+# commit NAO assinado na ponta (use um clone de trabalho com commit.gpgsign=false):
+./reconcilia.sh; echo "saida=$?"                                               # saida=3
+cat estado/.revisao                                                            # continua a revisao boa
+journalctl -t reconcilia --since '-1min' --no-pager | grep -c REJEITADO        # >= 1
+# commit assinado com OUTRA chave (fora do allowed_signers): idem, saida=3
+# revert assinado do commit ruim:
+./reconcilia.sh; echo "saida=$?"; grep -c . estado/app/config.env              # saida=0, conteudo de antes
+```
+
+  Teste de borda: apague o `cache/` inteiro e rode `./reconcilia.sh`; ele deve reconstruir tudo sozinho e terminar com `saida=0` e o mesmo `estado/.revisao`.
+
 ## Erros comuns nesta fase
 
 - `rebase` em branch compartilhada (reescreve histórico dos outros).

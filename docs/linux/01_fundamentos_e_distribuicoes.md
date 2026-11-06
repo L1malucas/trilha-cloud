@@ -210,6 +210,36 @@ Os próximos desafios seguem em dificuldade crescente (o de cima é o Desafio 1)
 - **Desafio 4:** sem usar `nproc`, descubra quantos núcleos o Linux enxerga lendo só `/proc/cpuinfo`, e prove que o resultado bate com o `nproc`.
   **Verifique:** `[ "$(grep -c ^processor /proc/cpuinfo)" = "$(nproc)" ] && echo OK` deve imprimir `OK`.
 
+### Desafio avançado — Auditoria de desvio da instalação
+**Nível:** avançado — leva de 1 a 3 horas
+
+- **Cenário:** uma máquina herdada "funcionava até alguém mexer em alguma coisa". Ninguém sabe quem editou o quê, e o time quer saber o que **diverge do que os pacotes instalaram**, sem depender da memória de ninguém. Você vai entregar um `~/lab/desvio.sh` que faça essa auditoria e possa ser rodado por um usuário comum.
+- **Requisitos:**
+  1. Saída em TSV, uma linha por arquivo, sem duplicatas e ordenada: `TIPO<TAB>caminho<TAB>pacote`.
+  2. `MODIFICADO`: arquivo (de configuração em `/etc` ou de programa em `/usr`) cujo conteúdo difere do que o pacote declarou, com o pacote dono na terceira coluna.
+  3. `AUSENTE`: arquivo que o pacote declara mas que não existe mais.
+  4. `ORFAO`: arquivo regular em `/usr/local/bin`, `/usr/local/sbin` ou `/opt` que nenhum pacote reivindica (descoberto dinamicamente, sem lista fixa de nomes).
+  5. Arquivos ilegíveis para o usuário comum não derrubam o script: stderr fica limpo e o exit code é 0.
+  6. Roda em menos de 2 minutos no seu Ubuntu.
+- **Restrições:** sem instalar `debsums` ou qualquer outro pacote; sem consultar a internet; não vale uma lista fixa de arquivos esperados.
+- **Onde pesquisar:** `man dpkg` (opção `--verify`), `dpkg-query` (campo `Conffiles`), `/var/lib/dpkg/info/*.md5sums`, usrmerge no Ubuntu.
+- **Verifique:**
+  ```bash
+  cd ~/lab && ./desvio.sh > base.tsv; echo "rc=$?"                       # rc=0
+  echo '# teste' | sudo tee -a /etc/issue.net >/dev/null                 # MODIFICADO
+  sudo mv /usr/bin/yes /usr/bin/yes.bak                                   # AUSENTE
+  printf '#!/bin/sh\n' | sudo tee /usr/local/bin/orfao-lab >/dev/null     # ORFAO
+  ./desvio.sh 2>erros.txt | diff base.tsv -                               # esperado: só 3 linhas novas (> ...)
+  ./desvio.sh | awk -F'\t' '$1=="MODIFICADO" && $2=="/etc/issue.net" && $3=="base-files"' | wc -l   # 1
+  ./desvio.sh | awk -F'\t' '$1=="AUSENTE" && $2=="/usr/bin/yes" && $3=="coreutils"' | wc -l         # 1
+  ./desvio.sh | awk -F'\t' '$1=="ORFAO" && $2=="/usr/local/bin/orfao-lab"' | wc -l                  # 1
+  wc -c < erros.txt; ./desvio.sh | sort | uniq -d | wc -l                 # 0 e 0
+  # Limpeza
+  sudo mv /usr/bin/yes.bak /usr/bin/yes; sudo rm /usr/local/bin/orfao-lab
+  sudo sed -i '/^# teste$/d' /etc/issue.net
+  ./desvio.sh | diff base.tsv - && echo "voltou ao baseline"
+  ```
+
 ## Erros comuns nesta fase
 
 - Chamar o kernel de "o Linux inteiro".

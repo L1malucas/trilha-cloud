@@ -468,6 +468,25 @@ kubectl delete ns lab8
 
   **Verifique:** `./saude.sh; echo $?` imprime a lista (vazia se tudo OK) e termina com `0`; ao deixar um Pod em `ImagePullBackOff`, o mesmo script lista esse Pod e termina com `1`.
 
+### Desafio avançado — Zero downtime de verdade: rollout e drain sem perder uma requisição
+**Nível:** avançado — leva de 1 a 3 horas
+- **Cenário:** o time de plataforma vai fazer manutenção nos nós do cluster e, na mesma semana, soltar uma versão nova da API. O negócio exige **zero requisições com erro** durante as duas operações, e já houve incidente porque o Kubernetes mandou tráfego para um Pod que estava sendo encerrado. Você precisa provar com medição, e não com "parece que funcionou", que o desenho aguenta um `rollout` e um `drain` de nó com carga contínua.
+- **Requisitos:**
+  1. Deployment `api` com 3 réplicas (nginx), distribuídas entre os dois workers do kind, com probes e `requests`/`limits`.
+  2. Um `PodDisruptionBudget` que garanta pelo menos 2 Pods disponíveis durante evictions voluntárias.
+  3. Encerramento gracioso configurado de modo que o Pod continue atendendo por alguns segundos depois de ser removido do Service (a propagação dos endpoints não é instantânea).
+  4. Estratégia de rollout que nunca reduz a capacidade abaixo de 3 Pods prontos.
+  5. Um gerador de carga dentro do cluster (Pod ou Job) que dispara requisições contínuas ao Service, por no mínimo 60 segundos, e registra o total e as falhas (timeout de 1s por requisição).
+  6. Durante a carga: um `rollout` para outra tag do nginx e, em seguida, o `drain` do worker que tem mais Pods da `api`, ambos terminando com sucesso.
+- **Restrições:** apenas recursos nativos do Kubernetes (sem Istio/service mesh, sem Helm); o gerador de carga não pode rodar no nó que será drenado; nada de `--force` nem `--disable-eviction` no `drain`.
+- **Onde pesquisar:** `PodDisruptionBudget`, `lifecycle.preStop`, `terminationGracePeriodSeconds`, `topologySpreadConstraints`, `kubectl drain` (flags `--ignore-daemonsets`, `--delete-emptydir-data`), `kubectl uncordon`.
+- **Verifique:**
+  - `kubectl get pdb` mostra `ALLOWED DISRUPTIONS` maior ou igual a 1 e `kubectl -n <ns> get pods -o wide` mostra Pods da `api` em dois nós diferentes antes do teste.
+  - `kubectl logs job/carga` (ou do Pod gerador) termina com algo como `total=N falhas=0` com N maior que 300, cobrindo o período do `rollout` e do `drain`.
+  - `kubectl rollout status deploy/api` termina com `successfully rolled out` e `kubectl drain <worker> --ignore-daemonsets --delete-emptydir-data` termina com `drained` sem timeout.
+  - `kubectl get nodes` mostra o worker drenado com `SchedulingDisabled`; depois do `kubectl uncordon`, volta a `Ready`.
+  - Borda: com o worker ainda drenado, `kubectl drain` no **outro** worker não deve conseguir evictar os Pods (fica reclamando do disruption budget); mostre a mensagem `Cannot evict pod as it would violate the pod's disruption budget` (interrompa com Ctrl+C e faça `uncordon` em seguida).
+
 **Limpeza:** `kind delete cluster --name lab`.
 
 ## Erros comuns nesta fase

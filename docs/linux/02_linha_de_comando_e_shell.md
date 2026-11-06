@@ -290,6 +290,33 @@ O `command -v` não imprime nada se o programa não existe e devolve código dif
 - **Desafio 4:** rode `ls ~/lab/dados /nao-existe` de modo que a saída normal vá para `~/lab/ok.txt`, o erro para `~/lab/erro.txt` e o código de saída do `ls` seja impresso na tela, tudo numa única linha encadeada.
   **Verifique:** `grep -c access.log ~/lab/ok.txt; wc -l < ~/lab/erro.txt` deve mostrar `1` e depois `1`, e o código impresso na tela deve ser `2`.
 
+### Desafio avançado — trace-run: executar e registrar sem perder nada
+**Nível:** avançado — leva de 1 a 3 horas
+
+- **Cenário:** o time de plantão cola comandos em produção e, depois do incidente, ninguém consegue reconstruir o que foi executado, o que saiu na tela e o que foi erro. Você vai escrever `~/bin/trace-run` (no seu `PATH`, como no Lab 5) para ser um prefixo: `trace-run <comando> [args...]`. Ele executa o comando normalmente e deixa um registro auditável.
+- **Requisitos:**
+  1. Cada execução cria `~/lab/runs/<timestamp>/` com `out` (stdout), `err` (stderr) e `meta`.
+  2. A saída continua aparecendo no terminal **nos mesmos descritores**: stdout no stdout, stderr no stderr (então `trace-run cmd 2>/dev/null` não mostra o erro na tela, mas ele ainda vai para `err`).
+  3. O exit code de `trace-run` é exatamente o do comando executado.
+  4. Argumentos com espaços chegam intactos ao comando, e o `meta` registra o comando de forma reexecutável (com escape), o exit code e a duração, nas chaves `cmd=`, `exit=` e `secs=`.
+  5. Nenhuma linha se perde: quando o comando termina, `out` e `err` já estão completos, mesmo com saída lenta.
+  6. Se o comando morrer por sinal (ex.: `SIGTERM`), o `meta` registra o exit code `128+sinal`.
+- **Restrições:** só bash (sem `script`, `ts`, `moreutils` ou Python); sem arquivos temporários fora do diretório da execução; o script deve ter `set -u` e não pode usar `eval`.
+- **Onde pesquisar:** `man bash` (seções *Process Substitution*, *Redirection* com `exec` e descritores extras, `wait`), `printf %q`, `$SECONDS` ou `EPOCHREALTIME`.
+- **Verifique:**
+  ```bash
+  trace-run bash -c 'echo out; echo err >&2; exit 7'; echo "rc=$?"     # out e err na tela, rc=7
+  d=$(ls -dt ~/lab/runs/*/ | head -1); cat "$d/out" "$d/err"; cat "$d/meta"   # out, err; meta com cmd=, exit=7, secs=
+  trace-run bash -c 'echo err >&2' 2>/dev/null                          # nada na tela
+  trace-run bash -c 'echo a; sleep 1; echo b' 2>/dev/null | wc -l      # 2
+  wc -l < "$(ls -dt ~/lab/runs/*/ | head -1)out"                        # 2 (nada perdido)
+  trace-run printf '%s|' 'a b' c; echo                                  # a b|c|
+  grep -F 'a\ b' "$(ls -dt ~/lab/runs/*/ | head -1)meta"               # linha cmd= com o escape
+  trace-run sleep 30 & sleep 1; pkill -TERM -x sleep; wait %1; echo "rc=$?"   # rc=143
+  grep 'exit=143' "$(ls -dt ~/lab/runs/*/ | head -1)meta"
+  grep -c eval ~/bin/trace-run                                          # 0
+  ```
+
 ## Erros comuns nesta fase
 
 - Espaços ao redor do `=` em variáveis (`X = 1` falha; é `X=1`).

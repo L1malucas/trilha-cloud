@@ -282,6 +282,24 @@ Mude `slo=99.5` para `99.9` e `95` e compare. Pergunta de raciocínio: se o orç
 
   **Verifique:** `./slo.sh; echo $?` imprime `OK` e `0` com o log atual; ao adicionar muitas linhas de status 500 ao `access.log` e rodar o coletor, imprime `ESTOURADO` e `1`.
 
+### Desafio avançado — Alerta de burn rate com múltiplas janelas, testado sem Prometheus no ar
+**Nível:** avançado — leva de 1 a 3 horas
+- **Cenário:** o SLO de 99,5% de disponibilidade da API está definido, mas o alerta atual (`ErroAlto` por limiar fixo) acorda o on-call por picos de 2 minutos que se resolvem sozinhos, e deixa passar degradações lentas que consomem o orçamento do mês sem ninguém ver. O SRE líder pediu um alerta baseado em **taxa de queima do error budget**, com duas janelas de tempo, e exige que a regra venha com testes automatizados, para o pipeline do módulo 22 barrar qualquer mudança que a quebre.
+- **Requisitos:**
+  1. *Recording rules* que calculem a razão de erros 5xx do `lab_http_requests_total` nas janelas de 5 minutos e de 1 hora.
+  2. Um alerta `ErrosQueimandoOrcamento` (severidade `critical`) que só dispare quando **as duas** janelas indicarem queima a pelo menos 14,4x a taxa sustentável do SLO de 99,5%.
+  3. Um segundo alerta `ErrosQueimaLenta` (severidade `warning`) para queima de 3x, usando janelas maiores (30 minutos e 6 horas).
+  4. Um arquivo de testes unitários de regras com pelo menos três cenários: degradação sustentada (deve disparar o `critical`), pico curto de poucos minutos (não deve disparar nada) e erro baixo constante de 0,3% (não deve disparar nada).
+  5. Cada alerta tem `annotations` com `summary` que cita a taxa observada e `runbook_url`.
+  6. Tudo passa pelas ferramentas de validação do Prometheus, sem precisar subir o servidor.
+- **Restrições:** usar apenas a imagem `prom/prometheus` já usada no módulo (sem instalar nada na máquina); os testes não podem depender de tráfego real, só de séries sintéticas.
+- **Onde pesquisar:** *Google SRE Workbook* capítulo "Alerting on SLOs" (multiwindow, multi-burn-rate), `promtool test rules` (`input_series`, `eval_time`, `alert_rule_test`), notação de série `a+bxN` do promtool, *recording rules*.
+- **Verifique:**
+  - `docker run --rm -v "$PWD":/w --entrypoint promtool prom/prometheus:latest check rules /w/alertas.yml` termina com `SUCCESS` e a contagem de regras inclui as recording rules e os dois alertas.
+  - `docker run --rm -v "$PWD":/w --entrypoint promtool prom/prometheus:latest test rules /w/alertas.test.yml` imprime `SUCCESS` para os três cenários.
+  - Borda: altere o limiar de 14,4 para 100 na regra e rode o teste de novo: o cenário de degradação sustentada precisa passar a **falhar** (`FAILED`), provando que os testes realmente cobrem a regra; reverta e confirme `SUCCESS`.
+  - `grep -c runbook_url alertas.yml` imprime `2` ou mais.
+
 **Limpeza:** `docker compose down -v`.
 
 ## Erros comuns nesta fase

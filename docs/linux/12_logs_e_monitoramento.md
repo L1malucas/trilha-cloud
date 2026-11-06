@@ -252,6 +252,28 @@ Esperado: `pedidos.log` tem as duas mensagens; `pedidos-erros.log` apenas a de f
 - **Desafio 3:** explique o significado de cada coluna do `vmstat` e identifique, numa saída de exemplo, se o gargalo é CPU, memória ou disco.
 - **Desafio 4:** crie `alerta.sh <tag> <limite>` que conta as mensagens de severidade `err` ou pior com aquela tag nos últimos 5 minutos e sai com código `2` se passarem do limite (e `0` caso contrário), usando `journalctl`. **Verifique:** depois de `logger -p user.err -t d4 a; logger -p user.err -t d4 b`, o comando `./alerta.sh d4 1; echo $?` imprime `2` e `./alerta.sh d4 5; echo $?` imprime `0`.
 
+### Desafio avançado — Shipper de logs que sobrevive à rotação e a `kill -9`
+
+**Nível:** avançado — leva de 1 a 3 horas
+
+- **Cenário:** um agente de coleta precisa enviar as linhas de um log de aplicação para um arquivo central, uma única vez cada, sem perder nem duplicar nada. O problema é que o log é rotacionado pelo `logrotate` no meio do caminho e o agente pode ser morto a qualquer momento (OOM killer, deploy, queda de energia). Quem já perdeu eventos de auditoria por causa de `tail -f` sabe o prejuízo. Você vai construir esse agente e provar a garantia com um teste de estresse.
+- **Requisitos:**
+  1. Um gerador (`gera.sh`) que escreve em `app.log` linhas numeradas `N <timestamp> mensagem`, de 1 até 20000, num ritmo contínuo (cerca de 500 linhas por segundo) e sem nunca partir uma linha ao meio.
+  2. Um `logrotate` rodando como usuário comum, com arquivo de estado próprio, que rotaciona `app.log` por tamanho no modo `create` (não use `copytruncate`) enquanto o gerador escreve; devem acontecer pelo menos 4 rotações durante o teste.
+  3. Um agente `shipper.sh` (ou em Python) que lê `app.log` e todos os arquivos já rotacionados, na ordem certa, e acrescenta as linhas em `central.log`.
+  4. O agente identifica o arquivo pelo inode, e não pelo nome, para saber que `app.log.1` é o antigo `app.log`.
+  5. Ele envia só linhas completas (terminadas em newline); uma linha ainda sendo escrita fica para depois.
+  6. Se o agente for morto com `SIGKILL` em qualquer momento e reiniciado, `central.log` termina com cada número de `1` a `20000` exatamente uma vez, na ordem.
+- **Restrições:** sem root; sem ferramentas de coleta prontas (`filebeat`, `fluent-bit`, `promtail`, `rsyslog imfile`); o estado do agente tem de sobreviver ao reinício (arquivo em disco); o agente não pode ler o log inteiro do começo a cada vez.
+- **Onde pesquisar:** `man logrotate` (`create`, `size`, `nocompress`, `dateext`, `-s`), `man stat` (`%i`), `man tail` (`-c +N`, `--follow=name`), escrita atômica com `rename` e `fsync`, semântica de entrega *at-least-once* x *exactly-once* (por exemplo, a documentação do Kafka ou do Filebeat sobre registry).
+- **Verifique:**
+  - `wc -l < central.log` imprime `20000`.
+  - `awk '{print $1}' central.log | sort -n | uniq -d | wc -l` imprime `0` (nada duplicado).
+  - `awk 'NR!=$1' central.log | wc -l` imprime `0` (todos presentes e em ordem).
+  - `ls app.log*` mostra pelo menos 4 arquivos rotacionados, e `stat -c %i` confirma que os inodes dos arquivos são distintos.
+  - Teste de falha: rode o teste de ponta a ponta matando o agente com `kill -9` pelo menos 3 vezes em momentos aleatórios (um loop com `sleep $((RANDOM % 3))`), inclusive logo depois de uma rotação, e repita as três checagens acima: devem continuar passando.
+  - Teste de borda: pare o agente, deixe o log rotacionar 2 vezes e só então reinicie; as linhas dos arquivos rotacionados durante a parada têm de aparecer em `central.log` na ordem certa, sem duplicata.
+
 ## Erros comuns nesta fase
 
 - Interpretar `free` baixo como falta de memória.

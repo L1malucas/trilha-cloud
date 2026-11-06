@@ -293,6 +293,28 @@ Esperado: a segunda cópia transfere **1** arquivo (`Number of regular files tra
 - **Desafio 3:** explique por que `ping google.com` pode falhar e `ping 142.250.x.x` funcionar, e como provar a causa.
 - **Desafio 4:** monte no `~/.ssh/config` os hosts `bastion` (`HostName 127.0.0.1`, `User <seu usuário>`) e `interno` (`HostName 127.0.0.1`, `ProxyJump bastion`) e inspecione a configuração efetiva sem conectar. **Verifique:** `ssh -G interno | grep -E '^(proxyjump|hostname) '` deve imprimir `hostname 127.0.0.1` e `proxyjump bastion`.
 
+### Desafio avançado — Dois links de internet com roteamento por origem e failover
+
+**Nível:** avançado — leva de 1 a 3 horas
+
+- **Cenário:** a filial tem um gateway com dois links de saída: `isp1` (barato) e `isp2` (caro, de reserva). A diretoria quer que a rede do financeiro (`10.1.0.0/24`) use sempre o `isp1` e a rede de visitantes (`10.2.0.0/24`) use sempre o `isp2`, para que o tráfego de visitante nunca disputa banda com o financeiro. Se um link cair, a rede dele precisa passar pelo outro sem ninguém mexer em nada. Você vai reproduzir tudo com namespaces, sem hardware.
+- **Requisitos:**
+  1. Montar 4 namespaces: `fin` e `vis` (clientes), `gw` (gateway com duas saídas) e `srv` (o "destino na internet", com o IP `192.0.2.10/32` na `lo`).
+  2. Cada cliente tem rota padrão só para o `gw`; `gw` e `srv` se ligam por dois pares veth em redes `/30` diferentes (`isp1` e `isp2`).
+  3. No `gw`, o tráfego vindo de `10.1.0.0/24` sai por `isp1` e o de `10.2.0.0/24` sai por `isp2`, usando tabelas de roteamento separadas e regras por origem (a tabela `main` não pode ter rota para `192.0.2.10`).
+  4. O `srv` deve responder de volta pelo mesmo link por onde o pedido chegou (retorno simétrico), sem NAT.
+  5. Failover: ao derrubar o link `isp1` pelo lado do `gw`, o `fin` continua alcançando `192.0.2.10` pelo `isp2`; ao subir o link de novo, volta a usar o `isp1`.
+  6. Um script `monta-filiais.sh` com os argumentos `up` e `down`, que pode ser repetido sem erro.
+- **Restrições:** sem NAT/masquerade, sem instalar pacotes, e nada de configuração fora dos namespaces (o host não pode ganhar rotas nem regras).
+- **Onde pesquisar:** `man ip-rule`, `man ip-route` (`table`, `metric`, `dead`/`linkdown`), `man ip-link` (`carrier`), documentação do kernel sobre `ignore_routes_with_linkdown` e `rp_filter` (`ip-sysctl`).
+- **Verifique:**
+  - `sudo ip netns exec gw ip rule show` lista duas regras `from 10.1.0.0/24` e `from 10.2.0.0/24`, cada uma apontando para uma tabela diferente.
+  - `sudo ip netns exec gw ip route get 192.0.2.10 from 10.1.0.2 iif <iface-fin>` termina em `dev isp1`, e o mesmo comando com `from 10.2.0.2 iif <iface-vis>` termina em `dev isp2`.
+  - `sudo ip netns exec fin ping -c 2 -W 1 192.0.2.10` e o equivalente em `vis` dão `0% packet loss`; `ip -n gw -s link show isp1` mostra o contador `TX` subindo só quando o ping parte do `fin`.
+  - `sudo ip netns exec gw ip route show table main | grep -c 192.0.2.10` imprime `0`.
+  - Teste de falha: `sudo ip -n gw link set isp1 down` e `ping` de `fin` ainda com `0% packet loss`, agora contando em `isp2`; `ip -n gw route get ... from 10.1.0.2 iif ...` mostra `dev isp2`. Depois `link set isp1 up`, o `route get` volta a `dev isp1`.
+  - Rodar `./monta-filiais.sh up` duas vezes termina com status `0`, e `./monta-filiais.sh down` seguido de `ip netns list` não deixa nenhum dos 4 namespaces.
+
 ## Erros comuns nesta fase
 
 - Diagnosticar "a internet" sem separar rede de DNS.

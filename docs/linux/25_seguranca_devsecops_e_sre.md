@@ -346,6 +346,26 @@ Complete as ações com donos e prazos reais. Repare que o texto não cita pesso
 
   **Verifique:** `./diagnostico.sh ~/lab/dados/app.log | head -5` imprime a contagem de ERROR por serviço, e `grep -c '^## ' runbook.md` imprime `5`.
 
+### Desafio avançado — Container endurecido com prova negativa e auditor automático
+**Nível:** avançado — leva de 1 a 3 horas
+- **Cenário:** a auditoria interna vai exigir que todo serviço novo rode com o "mínimo de tudo": usuário sem privilégio, sistema de arquivos imutável, sem capabilities e com um filtro de syscalls próprio. Só que a equipe de segurança já foi enganada por configs que "parecem" restritivas mas não bloqueiam nada. Você deve endurecer um container HTTP simples e, principalmente, **provar pelo lado negativo** que cada barreira funciona, além de entregar um auditor que reprove qualquer container fora do padrão.
+- **Requisitos:**
+  1. Container baseado em `alpine:3.20` servindo uma página estática na porta 8080 (por exemplo, com o `httpd` do BusyBox), rodando com UID/GID fixos acima de 10000.
+  2. Sistema de arquivos raiz somente leitura, com escrita permitida apenas em um `tmpfs` de `/tmp` limitado em tamanho.
+  3. Todas as capabilities removidas e elevação de privilégio bloqueada (nem `setuid` ajuda).
+  4. Um perfil seccomp **seu** (arquivo JSON) que mantém tudo liberado exceto um conjunto pequeno de syscalls que você justifique (incluindo `mkdir`/`mkdirat`), devolvendo erro `EPERM`.
+  5. Limites de recursos: no máximo 32 processos e 64 MiB de memória, sem swap extra.
+  6. Um script `audita.sh <container>` que lê `docker inspect` e imprime `OK` ou `FALHA: <motivo>` para cada um dos itens acima, saindo com `0` só se todos passarem.
+- **Restrições:** sem `--privileged`; sem Kubernetes; o perfil seccomp tem de ser um arquivo local seu, não o perfil padrão do Docker copiado sem alterações; o auditor não pode depender de nada além de `docker` e do que já vem no Ubuntu.
+- **Onde pesquisar:** `docker run` (`--read-only`, `--tmpfs`, `--cap-drop`, `--security-opt`, `--pids-limit`, `--memory-swap`), formato do perfil seccomp (`defaultAction`, `syscalls`, `SCMP_ACT_ERRNO`), `no-new-privileges`, `docker inspect --format` (HostConfig).
+- **Verifique:**
+  - `curl -s -o /dev/null -w '%{http_code}\n' localhost:8080` imprime `200`; `docker exec <c> id -u` imprime o UID escolhido (maior que 10000).
+  - Escrita barrada: `docker exec <c> sh -c 'touch /x'` falha com `Read-only file system`, enquanto `docker exec <c> sh -c 'touch /tmp/x && echo ok'` imprime `ok`.
+  - Seccomp realmente ativo: `docker exec <c> mkdir /tmp/pasta` falha com `Operation not permitted` (e não com erro de disco ou permissão de arquivo, já que `/tmp` é gravável).
+  - Capabilities: `docker exec <c> grep CapEff /proc/1/status` imprime `0000000000000000`.
+  - Limites: uma fork bomba controlada dentro do container (`sh -c 'for i in $(seq 100); do sleep 30 & done'`) termina com erro de `fork`/`Resource temporarily unavailable` e `docker stats --no-stream` mostra `64MiB` como limite de memória.
+  - Auditor: `./audita.sh <c>; echo $?` imprime vários `OK` e `0`; rodando o mesmo auditor num container `docker run -d alpine sleep 300` imprime pelo menos 4 linhas `FALHA` e `1`.
+
 ## Erros comuns nesta fase
 
 - Considerar segurança uma etapa final.

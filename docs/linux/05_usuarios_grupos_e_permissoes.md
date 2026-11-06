@@ -269,6 +269,34 @@ Esperado: a primeira consulta não imprime nada, a segunda só `UID 0: root`, a 
 
 **Limpeza:** `sudo userdel -r ana bruno carla; sudo groupdel dev qa ops; sudo rm -rf /srv/projeto /srv/publico`.
 
+### Desafio avançado — Porta 80 sem root e sem SUID
+**Nível:** avançado — leva de 1 a 3 horas
+
+- **Cenário:** o time quer servir uma página interna na porta 80, mas a política proíbe rodar o servidor como root e proíbe qualquer binário SUID novo no sistema. O Linux divide o poder do root em pedaços; você vai entregar o servidor com **exatamente o pedaço que ele precisa** e nenhum outro, e provar isso.
+- **Requisitos:**
+  1. Usuário de sistema `webapp`, sem shell de login, sem home interativo e fora de qualquer grupo privilegiado (`sudo`, `adm`).
+  2. Um `python3 -m http.server 80` servindo `/srv/web-lab` (dono `root`, somente leitura para o `webapp`) roda como `webapp` e responde `200` em `localhost:80`.
+  3. O processo tem como **única** capability efetiva a que permite abrir portas abaixo de 1024, comprovada em `/proc/<pid>/status` e decodificada para o nome.
+  4. O `/usr/bin/python3` original **não** é alterado e continua falhando ao abrir a porta 80 como `webapp`; nenhum arquivo novo tem SUID ou SGID.
+  5. Uma auditoria em um comando mostra que, nos diretórios do sistema que você escolher varrer, só o seu binário tem `cap_net_bind_service`.
+  6. Remover o privilégio faz o servidor voltar a falhar com erro claro (`Permission denied`).
+- **Restrições:** não use `sysctl net.ipv4.ip_unprivileged_port_start`, redirecionamento de porta (`iptables`/`nftables`) nem rode o servidor via `sudo` como root; não use SUID.
+- **Onde pesquisar:** `man 7 capabilities`, `setcap`/`getcap`/`capsh --decode` (pacote `libcap2-bin`), `CapEff` em `/proc/<pid>/status`.
+- **Verifique:**
+  ```bash
+  sudo getcap -r /opt /usr /srv 2>/dev/null | grep -c net_bind_service         # 1
+  find /opt /srv -perm /6000 2>/dev/null | wc -l                               # 0
+  sudo -u webapp /usr/bin/python3 -m http.server 80 --directory /srv/web-lab   # PermissionError, nunca sobe
+  # suba o servidor como webapp usando o seu binário e, em outro terminal:
+  curl -s -o /dev/null -w '%{http_code}\n' http://localhost:80/                # 200
+  pid=$(pgrep -n -u webapp -f 'http.server 80'); ps -o user= -p "$pid"         # webapp
+  grep CapEff /proc/$pid/status                                                # CapEff: 0000000000000400
+  capsh --decode=0000000000000400                                              # ...=cap_net_bind_service
+  id webapp | grep -Ec 'sudo|adm'                                              # 0
+  # falha esperada: retire a capability e tente subir de novo
+  sudo setcap -r <seu-binario>; sudo -u webapp <seu-binario> -m http.server 80 --directory /srv/web-lab   # Permission denied
+  ```
+
 ## Erros comuns nesta fase
 
 - `usermod -G` sem `-a`, removendo grupos.

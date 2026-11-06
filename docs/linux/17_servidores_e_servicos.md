@@ -290,6 +290,33 @@ Resposta esperada: `active` para os instalados e `escutando` para as portas ativ
 - **Desafio 3:** escreva um script que verifica a validade dos certificados (`openssl x509 -enddate`) e avisa se faltar menos de 30 dias.
 - **Desafio 4:** no banco `catalogo`, crie o usuário `leitor`, que só consegue **ler** a tabela `produtos` (nada de `INSERT`, `UPDATE` ou `DELETE`), e conecte-se como ele por TCP. Pense em `GRANT` e em quais privilégios o usuário precisa (conectar no banco, ver o schema, ler a tabela). **Verifique:** `PGPASSWORD='senha-do-leitor' psql -h localhost -U leitor -d catalogo -c "SELECT count(*) FROM produtos;"` imprime a contagem (`2`), e o mesmo comando com `-c "INSERT INTO produtos (nome) VALUES ('x');"` imprime `ERROR:  permission denied for table produtos`.
 
+### Desafio avançado — Voltar no tempo no PostgreSQL
+
+**Nível:** avançado — leva de 1 a 3 horas
+
+- **Cenário:** às 14h07 alguém rodou `DROP TABLE produtos` no banco `catalogo` em produção. O `pg_dump` noturno (Lab 6) perde quase um dia de pedidos, e o negócio quer tudo até o segundo anterior ao `DROP`. Você vai preparar o cluster para isso, simular o acidente e recuperar **sem tocar no cluster original**, subindo a cópia restaurada numa porta separada.
+- **Requisitos:**
+  1. O cluster principal passa a **arquivar WAL** continuamente para um diretório que só o usuário `postgres` lê e escreve.
+  2. Você faz um *base backup* físico do cluster em funcionamento (sem parar o serviço).
+  3. Depois do backup, insira mais duas linhas em `produtos`, force o arquivamento do segmento atual de WAL, marque o ponto exato antes do desastre **com um nome** (e não por horário) e só então apague a tabela.
+  4. Crie um segundo cluster (`pitr`, porta `5433`) a partir do base backup, configurado para recuperar o WAL arquivado **até o ponto nomeado** e depois abrir para escrita.
+  5. No `pitr`, `produtos` existe com as 4 linhas (2 originais e 2 posteriores ao backup); no cluster original, a tabela continua apagada (a restauração não mexeu nele).
+  6. Todo o processo de restauração vira um script `restaura-pitr.sh`, que pode ser executado de novo (recria o `pitr` do zero) sem quebrar.
+- **Restrições:** sem `pg_dump`, sem instalar extensões ou ferramentas como pgBackRest/Barman, e sem alterar o `pg_hba.conf` do cluster principal.
+- **Onde pesquisar:** documentação do PostgreSQL, capítulo *Continuous Archiving and Point-in-Time Recovery (PITR)*; `man pg_basebackup`; `man pg_createcluster` (pacote `postgresql-common`, e `pg_lsclusters`); funções `pg_create_restore_point` e `pg_switch_wal`.
+- **Verifique:**
+
+```bash
+sudo -u postgres psql -tc "SHOW archive_mode;"                         # on
+sudo ls /var/backups/pg-wal | wc -l                                    # > 0 (ou o diretório que você escolheu)
+pg_lsclusters                                                          # main (5432) e pitr (5433), ambos online
+sudo -u postgres psql -p 5433 -d catalogo -tc "SELECT count(*) FROM produtos;"      # 4
+sudo -u postgres psql -p 5433 -tc "SELECT pg_is_in_recovery();"        # f (já abriu para escrita)
+sudo -u postgres psql -p 5432 -d catalogo -tc "SELECT to_regclass('produtos');"     # vazio (continua apagada)
+```
+
+  Teste de borda: rode o `restaura-pitr.sh` de novo, com o nome do ponto trocado por um inexistente. O cluster `pitr` **não** deve abrir (`pg_lsclusters` mostra `down`, e o log em `/var/log/postgresql/` explica que o recovery terminou antes de alcançar o alvo); com o nome certo de volta, o script termina com `produtos` de novo com 4 linhas.
+
 ## Erros comuns nesta fase
 
 - Recarregar o Nginx sem `nginx -t`.

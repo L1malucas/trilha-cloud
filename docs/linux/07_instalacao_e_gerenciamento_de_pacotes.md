@@ -227,6 +227,29 @@ Na segunda execução todas as linhas devem começar com `ok`. Essa propriedade 
 - **Desafio 3:** adicione um repositório de terceiros (por exemplo, do Docker, seguindo a documentação oficial) usando chave em `/etc/apt/keyrings` com `signed-by`.
 - **Desafio 4:** gere um arquivo `~/lab/pacotes-manuais.txt` com os pacotes marcados como manuais e prove que reinstalá-los seria um "não faz nada". **Verifique:** `apt-mark showmanual > ~/lab/pacotes-manuais.txt; xargs -a ~/lab/pacotes-manuais.txt apt-get -s --no-upgrade install | grep -c '^Inst'` deve imprimir `0`.
 
+### Desafio avançado — Repositório APT privado e assinado
+
+**Nível:** avançado — leva de 1 a 3 horas
+
+- **Cenário:** sua empresa tem servidores sem saída para a internet e dois pacotes internos (`acme-core` e `acme-tools`, o segundo depende do primeiro). O time de segurança exige que só pacotes assinados pela chave da empresa sejam aceitos, e que um servidor possa ficar preso na versão antiga enquanto outro recebe a nova. Você vai montar o repositório inteiro do zero, num diretório local, e provar que o apt o trata como um repositório de verdade.
+- **Requisitos:**
+  1. Construir 2 versões (`1.0` e `2.0`) de `acme-core` e 1 versão de `acme-tools` com `Depends: acme-core (>= 1.0)`, todos `Architecture: all`.
+  2. Gerar o índice do repositório (`Packages`, `Release`) por uma ferramenta própria para isso, sem escrever o índice à mão.
+  3. Assinar o `Release` com uma chave GPG descartável criada num `GNUPGHOME` temporário (gerando `InRelease` e `Release.gpg`).
+  4. Consumir o repositório via `file:` com `signed-by` apontando só para a chave exportada, sem tocar em `/etc/apt` nem em `/var/lib/apt`.
+  5. Mostrar, em simulação, que `install acme-tools` puxa `acme-core` na versão `2.0` e que, com pinning, o mesmo comando escolhe a `1.0`.
+  6. Provar que o apt rejeita o repositório quando a chave não é a esperada e rejeita um `.deb` adulterado depois da assinatura.
+- **Restrições:** tudo roda como usuário comum (instalar de verdade fica fora; use simulação `-s`); sem rede; o script de montagem deve poder ser rodado duas vezes seguidas sem erro (idempotente).
+- **Onde pesquisar:** `man apt-ftparchive`, `man apt.conf` (opções `Dir::`), `man apt_preferences`, `man sources.list` (`Trusted`, `Signed-By`), `man gpg` (`--export`, `--quick-generate-key`, `--clearsign`).
+- **Verifique:**
+  - `apt-cache` com as opções de diretório isoladas, `policy acme-core`, deve listar `2.0` como candidata e `1.0` também disponível.
+  - `apt-get -s install acme-tools` (opções isoladas) deve imprimir duas linhas `Inst`, uma de `acme-core (2.0 ...)` e outra de `acme-tools`.
+  - Com o arquivo de preferences fixando `acme-core` em `1.0`, o mesmo comando deve mostrar `acme-core (1.0 ...)`.
+  - `gpg --no-default-keyring --keyring <seu-keyring> --verify <repo>/InRelease` deve dizer `Good signature`.
+  - Teste de falha 1: trocar o `signed-by` por outro keyring e rodar `update` deve produzir erro de assinatura (`NO_PUBKEY` ou `not signed`) e o `policy` não deve listar o repositório.
+  - Teste de falha 2: acrescentar um byte a um `.deb` do repositório sem regerar o índice e rodar `apt-get download acme-core` (com as opções isoladas) deve falhar com `Hash Sum mismatch` ou `File has unexpected size`.
+  - Rodar o script de montagem 2 vezes: a segunda termina com status `0` e não duplica entradas no `Packages` (`grep -c '^Package: acme-core' Packages` mostra `2`).
+
 ## Erros comuns nesta fase
 
 - Achar que `apt update` instala atualizações.

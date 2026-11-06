@@ -269,6 +269,28 @@ Esperado: `Bad configuration option: PermitRootLogn` e `exit=255`. Corrija o err
 - **Desafio 3:** explique, com um exemplo, o que SELinux impede mesmo para um processo rodando como root.
 - **Desafio 4:** no cenário do Lab 5, bloqueie **apenas** o IP `10.5.0.2` na porta 8080 com uma regra posicionada antes do `accept` (use `insert`), mantendo todo o resto como estava. **Verifique:** `sudo ip netns exec fw-cli curl -s -m 3 -o /dev/null -w '%{http_code}\n' http://10.5.0.1:8080/` imprime `000` e `sudo ip netns exec fw-srv nft list chain inet filtro entrada | grep -c 'ip saddr 10.5.0.2'` imprime `1`.
 
+### Desafio avançado — Port knocking com nftables
+
+**Nível:** avançado — leva de 1 a 3 horas
+
+- **Cenário:** um servidor de administração (porta `2222`, simulada por um `python3 -m http.server`) não pode ficar visível em scans, mas o time precisa abri-lo sob demanda de qualquer IP. O time de segurança aprovou a técnica de *port knocking*: a porta só abre para o IP que "bater" nas portas `7001`, `7002` e `7003`, nessa ordem, em até 10 segundos entre batidas. A abertura dura 30 segundos e depois se fecha sozinha, sem ninguém rodar nada. Tudo roda em namespaces, como no Lab 5.
+- **Requisitos:**
+  1. Dois namespaces (`knock-srv` e `knock-cli`) ligados por veth, o servidor com `policy drop` na entrada e `ct state established,related accept`.
+  2. A porta `2222` só responde `200` depois da sequência correta de batidas; antes disso o `curl -m 3` dá timeout (código `000`).
+  3. O estado da sequência vive em sets do próprio nftables, com `timeout`, e não em script externo, daemon ou `sleep`.
+  4. Uma batida fora de ordem (por exemplo `7001` seguida de `7003`) zera o progresso daquele IP.
+  5. A abertura expira sozinha em 30 s; depois disso a `2222` volta a dar timeout, mesmo com a conexão antiga já fechada.
+  6. Todo o conjunto de regras fica num arquivo `knock.nft` que é validado sem aplicar (`nft -c`) e pode ser carregado repetidas vezes de forma atômica, sem duplicar regras.
+- **Restrições:** sem fail2ban, sem `ufw`, sem programas de knock (`knockd` e semelhantes); tudo nos namespaces, o firewall do host fica intocado.
+- **Onde pesquisar:** `man nft` (seções *SETS*, *Set statements* `add`/`update`/`delete`, `flags timeout`), wiki do nftables (*Dynamic sets*, *Port knocking*), `man ip-netns`.
+- **Verifique:**
+  - `sudo nft -c -f knock.nft; echo $?` imprime `0` e não altera o ruleset; com um erro de sintaxe proposital em uma cópia do arquivo, imprime erro e status diferente de `0`.
+  - `sudo ip netns exec knock-cli curl -s -m 3 -o /dev/null -w '%{http_code}\n' http://10.7.0.1:2222/` imprime `000` antes das batidas.
+  - Depois de batidas em ordem (por exemplo com `nc -z -w1 10.7.0.1 7001`, `7002`, `7003`), o mesmo `curl` imprime `200`, e `nft list set` do servidor mostra o IP `10.7.0.2` com tempo restante (`expires`).
+  - Teste de falha: reiniciar o teste, bater `7001` e depois `7003`, e a `2222` continua dando `000`, mesmo batendo `7002` em seguida (a sequência foi zerada).
+  - Esperar 31 segundos após a abertura e o `curl` volta a imprimir `000`; `nft list set` não mostra mais o IP.
+  - Carregar `knock.nft` 2 vezes seguidas com `nft -f` e contar `nft list ruleset | grep -c 'dport 7001'` deve dar o mesmo número nas duas vezes.
+
 ## Erros comuns nesta fase
 
 - Habilitar firewall sem liberar o SSH antes.
