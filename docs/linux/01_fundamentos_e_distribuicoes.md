@@ -1,7 +1,7 @@
 ---
-id: "01_fundamentos_e_distribuicoes"
-title: "Módulo 01 — Fundamentos e Distribuições"
-sidebar_label: "01 · Fundamentos e Distribuições"
+id: '01_fundamentos_e_distribuicoes'
+title: 'Módulo 01 — Fundamentos e Distribuições'
+sidebar_label: '01 · Fundamentos e Distribuições'
 sidebar_position: 1
 ---
 
@@ -47,12 +47,12 @@ Uma **distribuição** (distro) é o carro montado: kernel + userland + gerencia
 
 ### Licenças — o que posso fazer com o código?
 
-| Licença | Tipo | Em uma frase |
-|---|---|---|
-| **GPL** (v2/v3) | *Copyleft* forte | Se você distribuir uma versão modificada, ela **também** precisa ser GPL (o kernel é GPLv2) |
-| **LGPL** | Copyleft fraco | Permite usar a biblioteca em software proprietário |
-| **MIT / BSD** | Permissivas | Faça quase tudo, mantendo o aviso de copyright |
-| **Apache 2.0** | Permissiva | Como MIT, com concessão explícita de patentes |
+| Licença         | Tipo             | Em uma frase                                                                                |
+| --------------- | ---------------- | ------------------------------------------------------------------------------------------- |
+| **GPL** (v2/v3) | _Copyleft_ forte | Se você distribuir uma versão modificada, ela **também** precisa ser GPL (o kernel é GPLv2) |
+| **LGPL**        | Copyleft fraco   | Permite usar a biblioteca em software proprietário                                          |
+| **MIT / BSD**   | Permissivas      | Faça quase tudo, mantendo o aviso de copyright                                              |
+| **Apache 2.0**  | Permissiva       | Como MIT, com concessão explícita de patentes                                               |
 
 > `[ATENÇÃO]` "Livre" não significa "grátis". Você pode vender software GPL; o que não pode é negar ao comprador o código-fonte e a liberdade de modificá-lo.
 
@@ -62,15 +62,15 @@ Uma **distribuição** (distro) é o carro montado: kernel + userland + gerencia
 
 Distribuições se agrupam por **família**, que define o formato de pacote e o gerenciador:
 
-| Família | Pacote | Gerenciador | Exemplos | Perfil típico |
-|---|---|---|---|---|
-| **Debian** | `.deb` | `apt`, `dpkg` | Debian, **Ubuntu**, Mint | Servidores, desktop, nuvem |
-| **Red Hat (RHEL)** | `.rpm` | `dnf`/`yum`, `rpm` | RHEL, Rocky, AlmaLinux, Fedora | Corporativo, certificação RHCSA |
-| **SUSE** | `.rpm` | `zypper` | SLES, openSUSE | Corporativo (Europa, SAP) |
-| **Arch** | `.pkg.tar` | `pacman` | Arch, Manjaro | Entusiastas, rolling release |
-| **Alpine** | `.apk` | `apk` | Alpine | Containers (imagens minúsculas) |
+| Família            | Pacote     | Gerenciador        | Exemplos                       | Perfil típico                   |
+| ------------------ | ---------- | ------------------ | ------------------------------ | ------------------------------- |
+| **Debian**         | `.deb`     | `apt`, `dpkg`      | Debian, **Ubuntu**, Mint       | Servidores, desktop, nuvem      |
+| **Red Hat (RHEL)** | `.rpm`     | `dnf`/`yum`, `rpm` | RHEL, Rocky, AlmaLinux, Fedora | Corporativo, certificação RHCSA |
+| **SUSE**           | `.rpm`     | `zypper`           | SLES, openSUSE                 | Corporativo (Europa, SAP)       |
+| **Arch**           | `.pkg.tar` | `pacman`           | Arch, Manjaro                  | Entusiastas, rolling release    |
+| **Alpine**         | `.apk`     | `apk`              | Alpine                         | Containers (imagens minúsculas) |
 
-Dois conceitos de ciclo de vida: **LTS** (*Long Term Support*, ex.: Ubuntu 24.04 tem 5 anos de suporte, ideal para servidor) e **rolling release** (atualização contínua, sem "versões", ex.: Arch).
+Dois conceitos de ciclo de vida: **LTS** (_Long Term Support_, ex.: Ubuntu 24.04 tem 5 anos de suporte, ideal para servidor) e **rolling release** (atualização contínua, sem "versões", ex.: Arch).
 
 Como escolher: para estudo e servidor, **Ubuntu LTS** ou **Debian**; para ambientes corporativos e prova RHCSA, **Rocky/AlmaLinux** (clones binários do RHEL, gratuitos).
 
@@ -78,20 +78,20 @@ Como escolher: para estudo e servidor, **Ubuntu LTS** ou **Debian**; para ambien
 
 O **Filesystem Hierarchy Standard** padroniza onde cada coisa mora — e por isso um admin consegue navegar em qualquer distro. Tudo parte da raiz `/`:
 
-| Diretório | Conteúdo |
-|---|---|
-| `/bin`, `/sbin` | Comandos essenciais (hoje, links para `/usr/bin` e `/usr/sbin`) |
-| `/etc` | **Configuração** do sistema (arquivos de texto) |
-| `/home` | Diretórios dos usuários |
-| `/root` | Diretório do usuário root |
-| `/var` | Dados que **variam**: logs (`/var/log`), filas, caches |
-| `/tmp` | Temporários (apagados no boot) |
-| `/usr` | Programas e bibliotecas instalados |
-| `/opt` | Software de terceiros isolado |
-| `/dev` | Dispositivos (discos, terminais) como arquivos |
-| `/proc`, `/sys` | Informações do kernel e hardware (virtuais) |
-| `/mnt`, `/media` | Pontos de montagem |
-| `/boot` | Kernel e GRUB |
+| Diretório        | Conteúdo                                                        |
+| ---------------- | --------------------------------------------------------------- |
+| `/bin`, `/sbin`  | Comandos essenciais (hoje, links para `/usr/bin` e `/usr/sbin`) |
+| `/etc`           | **Configuração** do sistema (arquivos de texto)                 |
+| `/home`          | Diretórios dos usuários                                         |
+| `/root`          | Diretório do usuário root                                       |
+| `/var`           | Dados que **variam**: logs (`/var/log`), filas, caches          |
+| `/tmp`           | Temporários (apagados no boot)                                  |
+| `/usr`           | Programas e bibliotecas instalados                              |
+| `/opt`           | Software de terceiros isolado                                   |
+| `/dev`           | Dispositivos (discos, terminais) como arquivos                  |
+| `/proc`, `/sys`  | Informações do kernel e hardware (virtuais)                     |
+| `/mnt`, `/media` | Pontos de montagem                                              |
+| `/boot`          | Kernel e GRUB                                                   |
 
 > `[TEORIA]` Ideia central do Unix: **tudo é arquivo**. Um disco é `/dev/sda`, informação de CPU é `/proc/cpuinfo`, e um programa lê e escreve nesses "arquivos" com as mesmas ferramentas que usa para texto.
 
@@ -99,7 +99,7 @@ O **Filesystem Hierarchy Standard** padroniza onde cada coisa mora — e por iss
 
 > `[ATENÇÃO]` Rode `ls -l /proc/cpuinfo`: o tamanho aparece como `0`, mas o `cat` mostra várias linhas. Arquivos em `/proc` e `/sys` são **virtuais** — não ocupam disco e o tamanho `0` não significa "vazio". Por isso `du -sh /proc` não serve para saber nada sobre uso de disco.
 
-> `[TENTE VOCÊ]` Confira o que a tabela do FHS disse sobre `/bin`: `ls -ld /bin` e `readlink -f /bin`. Resposta: `/bin` é um link simbólico (`->`) para `usr/bin`, e o `readlink -f` mostra `/usr/bin`. Isso é o *merged-usr*: no Ubuntu moderno `/bin`, `/sbin` e `/lib` viraram atalhos para dentro de `/usr`, então os dois caminhos chegam ao mesmo programa — e scripts antigos com `#!/bin/bash` continuam funcionando.
+> `[TENTE VOCÊ]` Confira o que a tabela do FHS disse sobre `/bin`: `ls -ld /bin` e `readlink -f /bin`. Resposta: `/bin` é um link simbólico (`->`) para `usr/bin`, e o `readlink -f` mostra `/usr/bin`. Isso é o _merged-usr_: no Ubuntu moderno `/bin`, `/sbin` e `/lib` viraram atalhos para dentro de `/usr`, então os dois caminhos chegam ao mesmo programa — e scripts antigos com `#!/bin/bash` continuam funcionando.
 
 ## Laboratórios
 
@@ -142,6 +142,7 @@ apt --version
 Compare: mesmos comandos básicos (`ls`, `cp`), gerenciadores de pacote diferentes.
 
 ![Terminal mostrando `cat /etc/os-release` do Ubuntu e `uname -a` com a palavra "microsoft" no kernel](screenshots/01-fundamentos-e-distribuicoes/01-os-release-uname.png)
+
 > `[PRINT]` Passo a passo para capturar: no WSL, rodar `cat /etc/os-release` e `uname -a`. Capturar as duas saídas.
 
 ### Lab 4 — Ficha de uma máquina herdada
@@ -168,14 +169,14 @@ Leia o raciocínio: as chaves `{ ...; }` juntam todos os `echo` para que **uma �
 Cenário: um colega pergunta "o `ss` vem de qual pacote? Preciso instalar em outro servidor". Descobrir o dono de um arquivo é rotina de quem administra:
 
 ```bash
-type -a ss                                  # onde está o executável
-dpkg -S "$(readlink -f "$(which ss)")"       # qual pacote é dono do arquivo
+type -a ss                                   # onde está o executável
+dpkg -S "*bin/ss"                            # qual pacote é dono do arquivo
 dpkg -L iproute2 | head -5                   # o que mais esse pacote instalou
 ls -lh /var/log/dpkg.log                     # histórico de instalações (Debian/Ubuntu)
 du -sh /usr /var /etc 2>/dev/null            # quem ocupa mais espaço no FHS
 ```
 
-Resultado esperado: o `dpkg -S` aponta `iproute2: /usr/bin/ss`. Repare no `readlink -f`: ele resolve o link do *merged-usr* para o caminho real que o `dpkg` conhece.
+Resultado esperado: o `dpkg -S` aponta `iproute2: /usr/bin/ss`. Repare no `readlink -f`: ele resolve o link do _merged-usr_ para o caminho real que o `dpkg` conhece.
 
 ### Lab 6 — Tradutor de famílias
 
@@ -211,6 +212,7 @@ Os próximos desafios seguem em dificuldade crescente (o de cima é o Desafio 1)
   **Verifique:** `[ "$(grep -c ^processor /proc/cpuinfo)" = "$(nproc)" ] && echo OK` deve imprimir `OK`.
 
 ### Desafio avançado — Auditoria de desvio da instalação
+
 **Nível:** avançado — leva de 1 a 3 horas
 
 - **Cenário:** uma máquina herdada "funcionava até alguém mexer em alguma coisa". Ninguém sabe quem editou o quê, e o time quer saber o que **diverge do que os pacotes instalaram**, sem depender da memória de ninguém. Você vai entregar um `~/lab/desvio.sh` que faça essa auditoria e possa ser rodado por um usuário comum.
@@ -252,13 +254,13 @@ Os próximos desafios seguem em dificuldade crescente (o de cima é o Desafio 1)
 
 ## Ponte com módulos anteriores
 
-| Vem de | Como reaparece aqui |
-|---|---|
-| Módulo 00 — WSL2 com kernel Linux real | O `uname -a` com "microsoft" é o exemplo vivo de kernel (motor) separado da distro (carro) |
-| Módulo 00 — `sudo`, `apt`, `/etc/os-release` | Viram a prova de que você está na família Debian/Ubuntu |
-| Módulo 00 — `~/lab` e `gera-lab.sh` | O `~/lab` é o `/home` do FHS na prática; `dados/` é o tipo de arquivo que viveria em `/var` |
-| Módulo 00 — systemd habilitado | É o PID 1 da camada de userland do diagrama deste módulo |
-| Módulo 00 — Git inicial em `~/lab` | Guarda a ficha do ambiente que você vai produzir abaixo |
+| Vem de                                       | Como reaparece aqui                                                                         |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Módulo 00 — WSL2 com kernel Linux real       | O `uname -a` com "microsoft" é o exemplo vivo de kernel (motor) separado da distro (carro)  |
+| Módulo 00 — `sudo`, `apt`, `/etc/os-release` | Viram a prova de que você está na família Debian/Ubuntu                                     |
+| Módulo 00 — `~/lab` e `gera-lab.sh`          | O `~/lab` é o `/home` do FHS na prática; `dados/` é o tipo de arquivo que viveria em `/var` |
+| Módulo 00 — systemd habilitado               | É o PID 1 da camada de userland do diagrama deste módulo                                    |
+| Módulo 00 — Git inicial em `~/lab`           | Guarda a ficha do ambiente que você vai produzir abaixo                                     |
 
 ### Lab integrador — Ficha do ambiente versionada
 
@@ -282,24 +284,24 @@ Esperado: `PID 1  : systemd`, a lista `access.log app.log usuarios.csv` e um com
 
 ## Conexão com os módulos seguintes
 
-| Conceito deste módulo | Aparece novamente em |
-|---|---|
-| Tudo é arquivo | Módulos 03, 08 e 13 |
-| FHS | Módulos 03 e 07 |
-| Famílias e gerenciadores de pacote | Módulo 07 |
-| Kernel x userland | Módulos 06, 13 e 14 (containers) |
+| Conceito deste módulo              | Aparece novamente em             |
+| ---------------------------------- | -------------------------------- |
+| Tudo é arquivo                     | Módulos 03, 08 e 13              |
+| FHS                                | Módulos 03 e 07                  |
+| Famílias e gerenciadores de pacote | Módulo 07                        |
+| Kernel x userland                  | Módulos 06, 13 e 14 (containers) |
 
 ## `[REFERÊNCIA]`
 
-- Linux Foundation — *Filesystem Hierarchy Standard*: https://refspecs.linuxfoundation.org/fhs.shtml
+- Linux Foundation — _Filesystem Hierarchy Standard_: https://refspecs.linuxfoundation.org/fhs.shtml
 - The Linux Kernel Archives: https://www.kernel.org/
-- GNU — *What is free software?*: https://www.gnu.org/philosophy/free-sw.html
+- GNU — _What is free software?_: https://www.gnu.org/philosophy/free-sw.html
 - Open Source Initiative — licenças: https://opensource.org/licenses
 - DistroWatch: https://distrowatch.com/
-- LPI — *Linux Essentials*: https://www.lpi.org/our-certifications/linux-essentials-overview/
+- LPI — _Linux Essentials_: https://www.lpi.org/our-certifications/linux-essentials-overview/
 - Ubuntu — ciclo de vida das versões: https://ubuntu.com/about/release-cycle
 
-**Como aprofundar:** leia *The Linux Command Line* (William Shotts, gratuito em https://linuxcommand.org/tlcl.php), capítulos 1 a 4, e o `man hier`.
+**Como aprofundar:** leia _The Linux Command Line_ (William Shotts, gratuito em https://linuxcommand.org/tlcl.php), capítulos 1 a 4, e o `man hier`.
 
 ## Checklist de saída
 
