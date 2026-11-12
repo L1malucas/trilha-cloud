@@ -1,7 +1,7 @@
 ---
-id: "04_processamento_de_texto"
-title: "Módulo 04 — Processamento de Texto"
-sidebar_label: "04 · Processamento de Texto"
+id: '04_processamento_de_texto'
+title: 'Módulo 04 — Processamento de Texto'
+sidebar_label: '04 · Processamento de Texto'
 sidebar_position: 4
 ---
 
@@ -65,17 +65,17 @@ grep -l "ERROR" ~/lab/dados/*.log     # só os NOMES dos arquivos que casam
 
 Uma regex descreve **um padrão de texto**. Pense num "curinga turbinado". Com `grep -E` (estendida) você usa:
 
-| Símbolo | Significa | Exemplo |
-|---|---|---|
-| `.` | Qualquer caractere | `a.c` casa `abc`, `a9c` |
-| `*` | 0 ou mais do anterior | `ab*` casa `a`, `abbb` |
-| `+` | 1 ou mais | `[0-9]+` casa `123` |
-| `?` | 0 ou 1 | `colou?r` |
-| `^` / `$` | Início / fim da linha | `^ERROR`, `500$` |
-| `[abc]` / `[0-9]` | Um caractere do conjunto | `[A-Z][a-z]+` |
-| `\|` | Ou | `404\|500` |
-| `( )` | Agrupa | `(ab)+` |
-| `{n,m}` | Repetição | `[0-9]{1,3}` |
+| Símbolo           | Significa                | Exemplo                 |
+| ----------------- | ------------------------ | ----------------------- |
+| `.`               | Qualquer caractere       | `a.c` casa `abc`, `a9c` |
+| `*`               | 0 ou mais do anterior    | `ab*` casa `a`, `abbb`  |
+| `+`               | 1 ou mais                | `[0-9]+` casa `123`     |
+| `?`               | 0 ou 1                   | `colou?r`               |
+| `^` / `$`         | Início / fim da linha    | `^ERROR`, `500$`        |
+| `[abc]` / `[0-9]` | Um caractere do conjunto | `[A-Z][a-z]+`           |
+| `\|`              | Ou                       | `404\|500`              |
+| `( )`             | Agrupa                   | `(ab)+`                 |
+| `{n,m}`           | Repetição                | `[0-9]{1,3}`            |
 
 ```bash
 grep -E ' (404|500) ' access.log | head                    # status 404 OU 500
@@ -120,9 +120,10 @@ awk '{print $9}' access.log | sort | uniq -c | sort -rn
 grep ERROR app.log | awk '{print $4}' | sort | uniq -c
 ```
 
-Leia como uma linha de montagem: *extraia a coluna → agrupe iguais → conte → ordene pelo número → pegue o topo*. Uma vez que você enxerga esse padrão, ele serve para quase toda análise de log.
+Leia como uma linha de montagem: _extraia a coluna → agrupe iguais → conte → ordene pelo número → pegue o topo_. Uma vez que você enxerga esse padrão, ele serve para quase toda análise de log.
 
 ![Terminal mostrando a saída do ranking dos 5 IPs com mais acessos, com a contagem à esquerda de cada IP](screenshots/04-processamento-de-texto/01-top-ips.png)
+
 > `[PRINT]` Passo a passo para capturar: dentro de `~/lab/dados`, rodar `cut -d' ' -f1 access.log | sort | uniq -c | sort -rn | head -5`. Capturar o comando e a saída.
 
 ## sed: reescrever com o fluxo (stream editor)
@@ -158,7 +159,7 @@ awk 'BEGIN{FS=","; OFS=" | "} NR>1 {print $2,$4}' usuarios.csv
 
 Estrutura: `awk 'CONDIÇÃO { AÇÃO }'`; `BEGIN` roda antes, `END` depois de ler tudo.
 
-> `[TEORIA]` Quando usar o quê: **grep** para *achar linhas*; **cut** para *cortar colunas simples*; **sed** para *substituir/remover texto*; **awk** quando há *colunas + cálculo/condição*. Se a tarefa pede "somar", "agrupar" ou "comparar campos", é awk.
+> `[TEORIA]` Quando usar o quê: **grep** para _achar linhas_; **cut** para _cortar colunas simples_; **sed** para _substituir/remover texto_; **awk** quando há _colunas + cálculo/condição_. Se a tarefa pede "somar", "agrupar" ou "comparar campos", é awk.
 
 > `[TENTE VOCÊ]` Conte linhas com o `awk` e compare com o `wc`: `awk 'END {print NR}' ~/lab/dados/access.log` e `awk '$9==404' ~/lab/dados/access.log | wc -l` contra `grep -c ' 404 ' ~/lab/dados/access.log`. Resposta: o primeiro imprime `5000` (o `NR` guarda o número da última linha lida, e o bloco `END` roda ao final); os dois últimos dão o mesmo número. A vantagem do `$9==404` é testar **só a coluna do status**: um `grep 404` solto também casaria um `404` dentro do campo de bytes ou do caminho.
 
@@ -182,11 +183,11 @@ Você **vai** precisar editar arquivos num servidor sem interface gráfica.
 
 **vim** (poderoso): tem **modos**. A ideia é difícil à primeira vista e depois muito eficiente:
 
-| Modo | Como entrar | Para quê |
-|---|---|---|
-| **Normal** | `Esc` | Navegar e comandar |
-| **Inserção** | `i` (inserir), `a` (depois), `o` (nova linha) | Digitar texto |
-| **Comando** | `:` | Salvar, sair, buscar/substituir |
+| Modo         | Como entrar                                   | Para quê                        |
+| ------------ | --------------------------------------------- | ------------------------------- |
+| **Normal**   | `Esc`                                         | Navegar e comandar              |
+| **Inserção** | `i` (inserir), `a` (depois), `o` (nova linha) | Digitar texto                   |
+| **Comando**  | `:`                                           | Salvar, sair, buscar/substituir |
 
 ```
 :w          salva           :q       sai
@@ -204,16 +205,19 @@ Para treinar de verdade: `vimtutor` (30 minutos, interativo).
 ## Laboratórios
 
 ### Lab 1 — grep
+
 1. Quantas linhas de `app.log` têm `ERROR`? E quantas **não** são `INFO`?
 2. Liste os IPs (sem repetição) que receberam `403`.
 3. Mostre as linhas de `access.log` com status 5xx usando regex (`' 5[0-9]{2} '`).
 
 ### Lab 2 — análise com pipes
+
 1. Top 3 páginas (`$7`) mais acessadas.
 2. Quantos erros por hora em `app.log` (extraia a hora com `cut -c12-13`).
 3. Quantos bytes foram servidos no total (use `awk`).
 
 ### Lab 3 — sed e awk
+
 1. Troque `exemplo.com` por `empresa.com` em `usuarios.csv`, mantendo `.bak`.
 2. Em `usuarios.csv`, calcule o salário médio por departamento com awk.
 3. Converta o `app.log` para só `HORA NIVEL` por linha.
@@ -224,15 +228,15 @@ Cenário: o monitoramento acusou erros 500 e você precisa dizer **quando** e **
 
 ```bash
 cd ~/lab/dados
-# Em que hora aconteceram mais 500? ($4 = [10/Jan/2026:HH:MM:SS; cut -c2-14 fica com "10/Jan/2026:HH")
-awk '$9==500 {print $4}' access.log | cut -c2-14 | sort | uniq -c | sort -rn | head -3
+# Em que hora aconteceram mais 500? ($4 = [10/Jan/2026:HH:MM:SS; cut -c2-15 fica com "10/Jan/2026:HH")
+awk '$9==500 {print $4}' access.log | cut -c2-15 | sort | uniq -c | sort -rn | head -3
 # Qual página falhou mais?
 awk '$9==500 {print $7}' access.log | sort | uniq -c | sort -rn | head -3
 # Que fração do total isso representa?
 awk '{t++} $9==500 {e++} END {printf "%d de %d (%.1f%%)\n", e, t, 100*e/t}' access.log
 ```
 
-Leia como investigação: primeiro *quando* (agrupando pela hora), depois *onde* (agrupando pela página), por fim *quanto* (proporção). Cada resposta direciona a pergunta seguinte.
+Leia como investigação: primeiro _quando_ (agrupando pela hora), depois _onde_ (agrupando pela página), por fim _quanto_ (proporção). Cada resposta direciona a pergunta seguinte.
 
 ### Lab 5 — Limpando e consultando o CSV de RH
 
@@ -271,6 +275,7 @@ O `diff -u` mostra a mudança no formato que o Git usa (`-` linha antiga, `+` li
   **Verifique:** `awk '{s+=$1} END {print s}' ~/lab/403-por-ip.txt` e `grep -c ' 403 ' ~/lab/dados/access.log` devem imprimir o **mesmo número**.
 
 ### Desafio avançado — Detector de rajadas em janela deslizante
+
 **Nível:** avançado — leva de 1 a 3 horas
 
 - **Cenário:** o time de segurança suspeita de força bruta e scraping, mas contar requisições por hora esconde as rajadas curtas: 25 requisições em 25 segundos somem numa média diária. Você vai escrever `~/lab/rajadas.sh <arquivo> <janela_s> <limite>`, que acha os IPs cuja **janela deslizante** de `janela_s` segundos chegou a `limite` requisições ou mais, em logs no formato do `access.log`.
@@ -282,7 +287,7 @@ O `diff -u` mostra a mudança no formato que o Git usa (`-` linha antiga, `+` li
   5. Exit code: `1` se algum IP foi apontado, `0` se nenhum, `2` para argumentos inválidos.
   6. Uma única passada no arquivo e memória por IP limitada à janela (descarte timestamps antigos).
 - **Restrições:** use o `awk` padrão do Ubuntu (descubra qual implementação é; `mktime` e `strftime` podem não existir); sem Python, sem instalar o `gawk`.
-- **Onde pesquisar:** `readlink -f $(command -v awk)`; *days from civil* (algoritmo de data para número de dias); fila circular ou ponteiro de cabeça em `awk`; `split()` e `-v` no `awk`.
+- **Onde pesquisar:** `readlink -f $(command -v awk)`; _days from civil_ (algoritmo de data para número de dias); fila circular ou ponteiro de cabeça em `awk`; `split()` e `-v` no `awk`.
 - **Verifique:**
   ```bash
   f=$(mktemp)
@@ -314,13 +319,13 @@ O `diff -u` mostra a mudança no formato que o Git usa (`-` linha antiga, `+` li
 
 ## Ponte com módulos anteriores
 
-| Vem de | Como reaparece aqui |
-|---|---|
-| Módulo 00 — `gera-lab.sh` | Gerou o `access.log`, `app.log` e `usuarios.csv` que são o seu material de análise |
-| Módulo 01 — `/etc` e arquivos de configuração | `grep -vE '^\s*#'` e `sed` limpam e alteram esses arquivos |
-| Módulo 02 — pipes, `tee`, redirecionamento, `$?` | Montam as receitas "extrair → agrupar → contar → ranquear" |
-| Módulo 02 — variáveis e `$(date)` | Nomeiam relatórios por data |
-| Módulo 03 — `find`, `xargs`, `tar` | Localizam logs em massa antes de aplicar `grep`/`awk` |
+| Vem de                                           | Como reaparece aqui                                                                |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| Módulo 00 — `gera-lab.sh`                        | Gerou o `access.log`, `app.log` e `usuarios.csv` que são o seu material de análise |
+| Módulo 01 — `/etc` e arquivos de configuração    | `grep -vE '^\s*#'` e `sed` limpam e alteram esses arquivos                         |
+| Módulo 02 — pipes, `tee`, redirecionamento, `$?` | Montam as receitas "extrair → agrupar → contar → ranquear"                         |
+| Módulo 02 — variáveis e `$(date)`                | Nomeiam relatórios por data                                                        |
+| Módulo 03 — `find`, `xargs`, `tar`               | Localizam logs em massa antes de aplicar `grep`/`awk`                              |
 
 ### Lab integrador — Relatório de acesso reutilizável
 
@@ -348,26 +353,26 @@ Esperado: a primeira linha cita o caminho do log, `Total de requisições: 5000`
 
 ## Conexão com os módulos seguintes
 
-| Conceito deste módulo | Aparece novamente em |
-|---|---|
-| `grep`/`awk` em logs | Logs — Módulo 12; troubleshooting — Módulo 16 |
-| Pipes e filtros | Scripts — Módulo 11 |
-| `vim`/`nano` | Todos os módulos (editar configs em `/etc`) |
-| Regex | Firewall/fail2ban — Módulo 10; Nginx — Módulo 17 |
-| `jq`/filtros em JSON | `az`/`gcloud` e Kubernetes — Módulos 21 e 23 |
+| Conceito deste módulo | Aparece novamente em                             |
+| --------------------- | ------------------------------------------------ |
+| `grep`/`awk` em logs  | Logs — Módulo 12; troubleshooting — Módulo 16    |
+| Pipes e filtros       | Scripts — Módulo 11                              |
+| `vim`/`nano`          | Todos os módulos (editar configs em `/etc`)      |
+| Regex                 | Firewall/fail2ban — Módulo 10; Nginx — Módulo 17 |
+| `jq`/filtros em JSON  | `az`/`gcloud` e Kubernetes — Módulos 21 e 23     |
 
 ## `[REFERÊNCIA]`
 
 - GNU grep: https://www.gnu.org/software/grep/manual/
 - GNU sed: https://www.gnu.org/software/sed/manual/
-- GNU awk (*The GNU Awk User's Guide*): https://www.gnu.org/software/gawk/manual/
+- GNU awk (_The GNU Awk User's Guide_): https://www.gnu.org/software/gawk/manual/
 - Regex interativo: https://regex101.com/ e https://regexr.com/
-- *The Linux Command Line*, partes de regex e processamento de texto: https://linuxcommand.org/tlcl.php
+- _The Linux Command Line_, partes de regex e processamento de texto: https://linuxcommand.org/tlcl.php
 - Vim — `vimtutor` e documentação: https://www.vim.org/docs.php
 - LPI — objetivos 103.2, 103.7, 103.8: https://www.lpi.org/our-certifications/exam-101-objectives/
 - `jq` (JSON no terminal): https://jqlang.github.io/jq/manual/
 
-**Como aprofundar:** o livro *Sed & Awk* (O'Reilly) e os jogos de "regex crossword" para treinar expressões regulares. Depois, aprenda `jq` para JSON.
+**Como aprofundar:** o livro _Sed & Awk_ (O'Reilly) e os jogos de "regex crossword" para treinar expressões regulares. Depois, aprenda `jq` para JSON.
 
 ## Checklist de saída
 

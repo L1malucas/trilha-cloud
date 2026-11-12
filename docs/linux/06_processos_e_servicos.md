@@ -1,7 +1,7 @@
 ---
-id: "06_processos_e_servicos"
-title: "Módulo 06 — Processos e Serviços"
-sidebar_label: "06 · Processos e Serviços"
+id: '06_processos_e_servicos'
+title: 'Módulo 06 — Processos e Serviços'
+sidebar_label: '06 · Processos e Serviços'
 sidebar_position: 6
 ---
 
@@ -23,7 +23,7 @@ Um **programa** é um arquivo em disco (a receita). Um **processo** é esse prog
 
 - **PID** (identificador) e **PPID** (o pai que o criou). Tudo nasce de outro processo (`fork`); o ancestral de todos é o PID 1 (`systemd`).
 - **UID/GID** do usuário dono (Módulo 05).
-- **Estado**: *R* rodando, *S* dormindo (esperando), *D* esperando I/O, *T* parado, *Z* **zumbi** (terminou, mas o pai não "coletou" o resultado).
+- **Estado**: _R_ rodando, _S_ dormindo (esperando), _D_ esperando I/O, _T_ parado, _Z_ **zumbi** (terminou, mas o pai não "coletou" o resultado).
 
 ```bash
 ps                         # processos deste terminal
@@ -37,7 +37,7 @@ htop                       # versão melhor (sudo apt install htop)
 uptime                     # load average (1, 5, 15 min)
 ```
 
-> `[TEORIA]` O **load average** é o número médio de processos *querendo* CPU. Em uma máquina de 4 núcleos, load 4.0 é "cheio"; 8.0 indica fila. Compare sempre com `nproc`.
+> `[TEORIA]` O **load average** é o número médio de processos _querendo_ CPU. Em uma máquina de 4 núcleos, load 4.0 é "cheio"; 8.0 indica fila. Compare sempre com `nproc`.
 
 > `[TENTE VOCÊ]` Seu WSL está sob pressão? Rode `uptime; nproc`. Resposta: se `uptime` mostra `load average: 0.15, 0.10, 0.05` e `nproc` mostra `4`, o sistema está folgado (0,15 de 4 núcleos). Raciocínio: você nunca lê o load sozinho; divide pelo número de núcleos. Load 4 em 4 núcleos é "cheio"; load 4 em 16 núcleos é tranquilo.
 
@@ -45,13 +45,13 @@ uptime                     # load average (1, 5, 15 min)
 
 Um **sinal** é uma notificação ao processo. O processo pode tratá-lo ou, em alguns casos, o kernel decide por ele.
 
-| Sinal | Nº | Efeito |
-|---|---|---|
-| `SIGTERM` | 15 | "Por favor, termine" (permite limpar) — **padrão do `kill`** |
-| `SIGKILL` | 9 | Mata na hora, sem chance de limpeza (não pode ser capturado) |
-| `SIGHUP` | 1 | "Recarregue a configuração" (muitos daemons) |
-| `SIGINT` | 2 | O que o `Ctrl+C` envia |
-| `SIGSTOP`/`SIGCONT` | 19/18 | Pausar / retomar |
+| Sinal               | Nº    | Efeito                                                       |
+| ------------------- | ----- | ------------------------------------------------------------ |
+| `SIGTERM`           | 15    | "Por favor, termine" (permite limpar) — **padrão do `kill`** |
+| `SIGKILL`           | 9     | Mata na hora, sem chance de limpeza (não pode ser capturado) |
+| `SIGHUP`            | 1     | "Recarregue a configuração" (muitos daemons)                 |
+| `SIGINT`            | 2     | O que o `Ctrl+C` envia                                       |
+| `SIGSTOP`/`SIGCONT` | 19/18 | Pausar / retomar                                             |
 
 ```bash
 sleep 600 &                # cria um processo para treinar
@@ -71,7 +71,7 @@ killall sleep              # por nome exato
 
 ## Prioridade: nice e renice
 
-O valor **nice** vai de -20 (mais prioridade) a 19 (menos). Usuário comum só pode *aumentar* o nice (ser "mais gentil"); aumentar a prioridade exige root.
+O valor **nice** vai de -20 (mais prioridade) a 19 (menos). Usuário comum só pode _aumentar_ o nice (ser "mais gentil"); aumentar a prioridade exige root.
 
 ```bash
 nice -n 10 comando_pesado          # inicia com baixa prioridade
@@ -121,18 +121,19 @@ tmux kill-session -t lab
 ```
 
 ![tmux com três painéis: um com `top`, outro com `tail -f` de um log e outro com o shell livre](screenshots/06-processos-e-servicos/01-tmux-tres-paineis.png)
+
 > `[PRINT]` Passo a passo para capturar: `tmux new -s lab`, dividir em 3 painéis (`Ctrl+b %` e `Ctrl+b "`), rodar `top` em um, `tail -f ~/lab/dados/app.log` em outro. Capturar a tela inteira.
 
 ## systemd: o gerente de serviços
 
 O **systemd** é o PID 1 na maioria das distros modernas: inicia o sistema, sobe serviços na ordem certa (paralelo, por dependências), monitora e reinicia o que cai, e guarda logs. Ele trabalha com **units** (descrições em arquivo):
 
-| Tipo | Para quê |
-|---|---|
-| `.service` | Um serviço/daemon (nginx, sshd) |
-| `.target` | Grupo de units = estado do sistema (como os antigos *runlevels*) |
-| `.timer` | Agendamento (substituto do cron) |
-| `.mount`, `.socket`, `.path` | Montagens, sockets, observação de arquivos |
+| Tipo                         | Para quê                                                         |
+| ---------------------------- | ---------------------------------------------------------------- |
+| `.service`                   | Um serviço/daemon (nginx, sshd)                                  |
+| `.target`                    | Grupo de units = estado do sistema (como os antigos _runlevels_) |
+| `.timer`                     | Agendamento (substituto do cron)                                 |
+| `.mount`, `.socket`, `.path` | Montagens, sockets, observação de arquivos                       |
 
 **Targets** principais: `multi-user.target` (servidor, sem interface), `graphical.target`, `rescue.target`, `emergency.target`.
 
@@ -185,7 +186,7 @@ systemctl status ola
 journalctl -u ola -f                  # logs ao vivo (Ctrl+C sai)
 ```
 
-Leia as seções: `[Unit]` descreve e define ordem/dependências, `[Service]` diz *como* rodar (`ExecStart`, `Restart`), `[Install]` diz *em que target* habilitar.
+Leia as seções: `[Unit]` descreve e define ordem/dependências, `[Service]` diz _como_ rodar (`ExecStart`, `Restart`), `[Install]` diz _em que target_ habilitar.
 
 > `[ATENÇÃO]` Depois de criar ou editar uma unit, rode **`systemctl daemon-reload`**. Sem isso o systemd continua com a versão antiga na memória.
 
@@ -205,7 +206,7 @@ journalctl --disk-usage
 ## Boot: o caminho do botão ao login
 
 1. **Firmware (BIOS/UEFI)** testa o hardware e acha o disco de boot.
-2. **Bootloader (GRUB)** carrega o kernel e o *initramfs* (mini-sistema temporário).
+2. **Bootloader (GRUB)** carrega o kernel e o _initramfs_ (mini-sistema temporário).
 3. **Kernel** inicializa hardware e monta a raiz `/`.
 4. **systemd (PID 1)** sobe os serviços até o target padrão.
 5. **Login**.
@@ -215,22 +216,28 @@ journalctl --disk-usage
 ## Laboratórios
 
 ### Lab 1 — Caçando processos
+
 1. Inicie `sleep 1000 &` três vezes; liste com `pgrep -a sleep`; mate um com `kill`, outro com `kill -9`, o terceiro com `pkill`.
 2. Com `top`, ordene por memória (`M`) e identifique o processo que mais consome.
 3. Gere carga (`yes > /dev/null &`), observe no `top`, ajuste com `renice`, e mate.
 
 ### Lab 2 — Jobs e tmux
+
 1. Rode `sleep 600`, suspenda (`Ctrl+Z`), mande para o fundo (`bg`) e traga de volta (`fg`).
 2. Crie uma sessão tmux com `top` e `tail -f`, desanexe, feche o terminal, abra outro e reanexe.
 
 ### Lab 3 — Meu serviço no systemd
+
 1. Crie o `ola.service` acima, habilite e veja o log.
 2. Faça `sudo kill -9 $(systemctl show -p MainPID --value ola)` e confirme que ele **reinicia sozinho** (`Restart=on-failure`).
 3. Mude o `RestartSec`, rode `daemon-reload` e `restart`.
 
 ### Lab 4 — Limpando um serviço que ignora o SIGTERM
+
 Cenário: um worker de fila precisa terminar a mensagem atual antes de sair. Se o systemd mata na marra, a mensagem se perde.
+
 1. Crie o script e a unit:
+
 ```bash
 mkdir -p ~/lab/servico && cat > ~/lab/servico/worker.sh <<'SH'
 #!/usr/bin/env bash
@@ -250,13 +257,17 @@ TimeoutStopSec=10
 EOF
 sudo systemctl daemon-reload && sudo systemctl start worker
 ```
+
 2. Pare e leia o log: `sudo systemctl stop worker; journalctl -u worker -o cat -n 5 --no-pager`. Você deve ver as linhas "recebi SIGTERM" e "encerrado limpo".
 3. Remova o `trap` (comente a linha), reinicie e pare de novo: o encerramento é imediato e sem mensagens. Moral: o `systemctl stop` envia `SIGTERM`; quem trata o sinal é o seu programa.
 4. Limpeza: `sudo rm /etc/systemd/system/worker.service; sudo systemctl daemon-reload`.
 
 ### Lab 5 — Ajustando um serviço sem editar o original (drop-in)
-Cenário: a unit vem de um pacote e você não deve editá-la (o upgrade sobrescreve). A solução profissional é um *drop-in*.
+
+Cenário: a unit vem de um pacote e você não deve editá-la (o upgrade sobrescreve). A solução profissional é um _drop-in_.
+
 1. Com o `ola.service` do Lab 3 ativo, crie o ajuste:
+
 ```bash
 sudo mkdir -p /etc/systemd/system/ola.service.d
 sudo tee /etc/systemd/system/ola.service.d/override.conf >/dev/null <<'EOF'
@@ -267,11 +278,14 @@ Environment=AMBIENTE=homolog
 EOF
 sudo systemctl daemon-reload && sudo systemctl restart ola
 ```
+
 2. Confira o que o systemd enxerga: `systemctl cat ola` (mostra o arquivo original e o drop-in) e `systemctl show ola -p Restart -p RestartUSec`. Esperado: `Restart=always` e `RestartUSec=1s`.
 3. Remova o diretório `ola.service.d`, rode `daemon-reload` e `restart`, e confirme que voltou para `on-failure`.
 
 ### Lab 6 — Processo transitório com systemd-run
+
 Cenário: você precisa rodar uma tarefa pesada uma única vez, com baixa prioridade e visível como serviço, sem criar arquivo de unit.
+
 1. `sudo systemd-run --unit=tarefa-lab --nice=10 sleep 300`
 2. `systemctl status tarefa-lab --no-pager | head -8` e `ps -o pid,ni,cmd -C sleep`. O nice deve ser 10.
 3. `sudo systemctl stop tarefa-lab` e confirme com `systemctl is-active tarefa-lab` (retorna `inactive`).
@@ -287,6 +301,7 @@ Cenário: você precisa rodar uma tarefa pesada uma única vez, com baixa priori
 **Limpeza:** `sudo systemctl disable --now ola; sudo rm /etc/systemd/system/ola.service; sudo systemctl daemon-reload`.
 
 ### Desafio avançado — Serviços com sandbox e limites medidos
+
 **Nível:** avançado — leva de 1 a 3 horas
 
 - **Cenário:** dois jobs de terceiros vão rodar no mesmo servidor: um que vaza memória e um que consome CPU sem parar. Você precisa garantir que nenhum deles derrube a máquina, nem leia ou escreva onde não deve, e **medir** isso, sem confiar só no que diz o arquivo de unit.
@@ -331,17 +346,20 @@ Cenário: você precisa rodar uma tarefa pesada uma única vez, com baixa priori
 
 ## Ponte com módulos anteriores
 
-| Vem de | Como reaparece aqui |
-|---|---|
-| Módulo 02 (pipes, redirecionamento, `$!`) | `ps ... | awk`, `kill $!`, `nohup ... > saida.log 2>&1 &` e `journalctl | grep` |
-| Módulo 03 (arquivos e caminhos) | `ExecStart` precisa de caminho absoluto; a unit vive em `/etc/systemd/system/` |
-| Módulo 04 (`grep`, `awk`, `sort`, `uniq`) | Contar e agrupar linhas do `journalctl -o cat` |
-| Módulo 05 (usuários, `chmod`, `sudo`) | `User=` da unit, permissões do script e do diretório de estado |
+| Vem de                                    | Como reaparece aqui                                                            |
+| ----------------------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------- | ----- |
+| Módulo 02 (pipes, redirecionamento, `$!`) | `ps ...                                                                        | awk`, `kill $!`, `nohup ... > saida.log 2>&1 &`e`journalctl | grep` |
+| Módulo 03 (arquivos e caminhos)           | `ExecStart` precisa de caminho absoluto; a unit vive em `/etc/systemd/system/` |
+| Módulo 04 (`grep`, `awk`, `sort`, `uniq`) | Contar e agrupar linhas do `journalctl -o cat`                                 |
+| Módulo 05 (usuários, `chmod`, `sudo`)     | `User=` da unit, permissões do script e do diretório de estado                 |
 
 ### Lab integrador — Serviço com usuário dedicado, permissões e análise de log
+
 Cenário: você vai publicar um coletor de métricas que não pode rodar como seu usuário nem como root.
+
 1. (Módulo 05) Crie um usuário de sistema sem login: `sudo useradd --system --no-create-home --shell /usr/sbin/nologin coletor`.
 2. Instale o script em local acessível a ele (a sua `~` costuma ser `750` no Ubuntu 24.04, então ele não leria `~/lab`):
+
 ```bash
 cat > ~/lab/servico/coletor.sh <<'SH'
 #!/usr/bin/env bash
@@ -356,7 +374,9 @@ done
 SH
 sudo install -m 0755 ~/lab/servico/coletor.sh /usr/local/bin/coletor.sh
 ```
+
 3. (Módulo 06) Crie a unit com diretório de estado gerenciado pelo systemd:
+
 ```bash
 sudo tee /etc/systemd/system/coletor.service >/dev/null <<'EOF'
 [Unit]
@@ -370,32 +390,34 @@ Restart=on-failure
 EOF
 sudo systemctl daemon-reload && sudo systemctl enable --now coletor
 ```
+
 4. (Módulos 04 e 05) Depois de uns 15 segundos, verifique dono e conteúdo e analise o log:
+
 ```bash
 ls -ld /var/lib/coletor                                  # dono: coletor
 ps -o user,pid,cmd -C coletor.sh                         # roda como coletor, não como você
 journalctl -u coletor -o cat --no-pager | awk '{c[$1]++} END{for(k in c) print k, c[k]}'
 sudo cat /var/lib/coletor/saida.txt | grep -c WARN
 ```
-Esperado: o `awk` imprime algo como `INFO 11` e `WARN 4`; o `grep -c` bate com o WARN. Se o `StateDirectory=coletor` não existisse, o `echo >>` falharia com `Permission denied` e o `journalctl` mostraria o erro: é o Módulo 05 aparecendo dentro do Módulo 06.
-5. Limpeza: `sudo systemctl disable --now coletor; sudo rm /etc/systemd/system/coletor.service /usr/local/bin/coletor.sh; sudo systemctl daemon-reload; sudo userdel coletor`.
+
+Esperado: o `awk` imprime algo como `INFO 11` e `WARN 4`; o `grep -c` bate com o WARN. Se o `StateDirectory=coletor` não existisse, o `echo >>` falharia com `Permission denied` e o `journalctl` mostraria o erro: é o Módulo 05 aparecendo dentro do Módulo 06. 5. Limpeza: `sudo systemctl disable --now coletor; sudo rm /etc/systemd/system/coletor.service /usr/local/bin/coletor.sh; sudo systemctl daemon-reload; sudo userdel coletor`.
 
 ## Conexão com os módulos seguintes
 
-| Conceito deste módulo | Aparece novamente em |
-|---|---|
-| systemd, units | Serviços — Módulo 17; timers — Módulo 11 |
-| `journalctl` | Logs — Módulo 12; troubleshooting — Módulo 16 |
-| Sinais, processos | Containers — Módulo 14 e 20 |
-| Boot e targets | Recuperação — Módulo 16 |
-| Load e prioridades | Observabilidade — Módulo 24 |
+| Conceito deste módulo | Aparece novamente em                          |
+| --------------------- | --------------------------------------------- |
+| systemd, units        | Serviços — Módulo 17; timers — Módulo 11      |
+| `journalctl`          | Logs — Módulo 12; troubleshooting — Módulo 16 |
+| Sinais, processos     | Containers — Módulo 14 e 20                   |
+| Boot e targets        | Recuperação — Módulo 16                       |
+| Load e prioridades    | Observabilidade — Módulo 24                   |
 
 ## `[REFERÊNCIA]`
 
 - systemd — man pages: https://www.freedesktop.org/software/systemd/man/
 - `man7.org` — `signal(7)`, `proc(5)`: https://man7.org/linux/man-pages/man7/signal.7.html
 - tmux wiki: https://github.com/tmux/tmux/wiki
-- Red Hat — *Managing systemd*: https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/configuring_basic_system_settings/managing-system-services-with-systemctl_configuring-basic-system-settings
+- Red Hat — _Managing systemd_: https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/configuring_basic_system_settings/managing-system-services-with-systemctl_configuring-basic-system-settings
 - Brendan Gregg — Linux performance: https://www.brendangregg.com/linuxperf.html
 - LPI — objetivos 101.3 e 103.5: https://www.lpi.org/our-certifications/exam-101-objectives/
 

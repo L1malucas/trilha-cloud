@@ -1,7 +1,7 @@
 ---
-id: "00_preparando_o_ambiente_wsl"
-title: "Módulo 00 — Instalando e configurando o WSL2 no Windows"
-sidebar_label: "00 · Instalando o WSL2"
+id: '00_preparando_o_ambiente_wsl'
+title: 'Módulo 00 — Instalando e configurando o WSL2 no Windows'
+sidebar_label: '00 · Instalando o WSL2'
 sidebar_position: 0
 ---
 
@@ -19,16 +19,16 @@ sidebar_position: 0
 
 ## Por que praticar num Linux de verdade
 
-Linux se aprende com as mãos: ninguém aprende `grep`, permissões ou `systemd` só lendo. O WSL2 (*Windows Subsystem for Linux*) dá, no seu próprio computador, um **kernel Linux real** rodando numa VM leve integrada ao Windows. Você abre um terminal e está num Ubuntu de verdade, sem dual boot e sem instalar VirtualBox.
+Linux se aprende com as mãos: ninguém aprende `grep`, permissões ou `systemd` só lendo. O WSL2 (_Windows Subsystem for Linux_) dá, no seu próprio computador, um **kernel Linux real** rodando numa VM leve integrada ao Windows. Você abre um terminal e está num Ubuntu de verdade, sem dual boot e sem instalar VirtualBox.
 
 Compare as versões:
 
-| | WSL 1 | **WSL 2** (use este) |
-|---|---|---|
-| Kernel | Camada de tradução para o Windows | Kernel Linux real (VM leve) |
-| Compatibilidade | Parcial | Quase total (inclui Docker, systemd) |
-| Arquivos Linux | Mais lento | Rápido (sistema ext4 próprio) |
-| Arquivos do Windows (`/mnt/c`) | Rápido | Mais lento |
+|                                | WSL 1                             | **WSL 2** (use este)                 |
+| ------------------------------ | --------------------------------- | ------------------------------------ |
+| Kernel                         | Camada de tradução para o Windows | Kernel Linux real (VM leve)          |
+| Compatibilidade                | Parcial                           | Quase total (inclui Docker, systemd) |
+| Arquivos Linux                 | Mais lento                        | Rápido (sistema ext4 próprio)        |
+| Arquivos do Windows (`/mnt/c`) | Rápido                            | Mais lento                           |
 
 > `[TEORIA]` O layout de estudo desta trilha é **duas telas**: a trilha aberta no navegador de um lado e o terminal do outro. Leia um passo, execute na hora, observe o resultado. Isso vale mais do que ler o módulo inteiro e praticar depois.
 
@@ -56,6 +56,7 @@ wsl --shutdown                  # desliga TODAS as distros (reinício limpo)
 > `[ATENÇÃO]` Se `wsl --install` falhar com erro de virtualização, entre na BIOS/UEFI e habilite **Intel VT-x / AMD-V (SVM)**. Em notebooks, o nome pode ser "Virtualization Technology". Sem isso o WSL2 não inicia.
 
 ![PowerShell mostrando a saída de `wsl -l -v` com Ubuntu-24.04 na VERSION 2 e estado Running](screenshots/00-preparando-o-ambiente-wsl/01-wsl-lista-versao.png)
+
 > `[PRINT]` Passo a passo para capturar: abrir o PowerShell, rodar `wsl -l -v` com o Ubuntu aberto em outra janela. Capturar a tabela com NAME, STATE e VERSION.
 
 ## Passo 2 — Primeiro acesso e sanidade
@@ -172,6 +173,7 @@ ls -lh dados/ && head -3 dados/access.log
 > `[TEORIA]` Não se preocupe em entender o script agora: ele usa conceitos dos Módulos 02 a 04 e 11. Por ora, ele só prepara o terreno. Você volta a ele ao final da trilha.
 
 ![Terminal mostrando a listagem da pasta ~/lab/dados com os arquivos access.log, app.log e usuarios.csv](screenshots/00-preparando-o-ambiente-wsl/02-lab-dados-gerados.png)
+
 > `[PRINT]` Passo a passo para capturar: rodar `ls -lh ~/lab/dados` e `head -3 ~/lab/dados/access.log`. Capturar o terminal com tamanhos e as 3 primeiras linhas do log.
 
 ## Passo 6 — Snapshots: errar sem medo
@@ -192,12 +194,12 @@ A ideia: quebre à vontade na `ubuntu-lab`, apague e reimporte. Sua distro princ
 
 ## O que o WSL NÃO faz (e como a trilha contorna)
 
-| Limitação | O que a trilha faz |
-|---|---|
-| Não há boot nem GRUB reais | Boot e recuperação são estudados na teoria, com simulações e, opcionalmente, uma VM (Multipass/VirtualBox) |
-| Kernel é o da Microsoft; módulos limitados | Módulo 13 mostra `/proc`, `/sys` e o que é possível |
-| Discos físicos extras só via `wsl --mount` | Partições, LVM e RAID são feitos com **arquivos de imagem em loop** (`losetup`) |
-| Rede em NAT por padrão | Módulos de redes usam namespaces e uma segunda distro |
+| Limitação                                  | O que a trilha faz                                                                                         |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| Não há boot nem GRUB reais                 | Boot e recuperação são estudados na teoria, com simulações e, opcionalmente, uma VM (Multipass/VirtualBox) |
+| Kernel é o da Microsoft; módulos limitados | Módulo 13 mostra `/proc`, `/sys` e o que é possível                                                        |
+| Discos físicos extras só via `wsl --mount` | Partições, LVM e RAID são feitos com **arquivos de imagem em loop** (`losetup`)                            |
+| Rede em NAT por padrão                     | Módulos de redes usam namespaces e uma segunda distro                                                      |
 
 ## Práticas
 
@@ -223,6 +225,7 @@ printf 'dados/\n' > .gitignore && git add . && git commit -m "Laboratório inici
 `[CUSTO]` Gratuito. O disco virtual do WSL cresce conforme o uso e **não encolhe sozinho**; acompanhe o tamanho em `C:\Users\<voce>\AppData\Local\...\ext4.vhdx`.
 
 ### Desafio avançado — Preflight do laboratório
+
 **Nível:** avançado — leva de 1 a 3 horas
 
 - **Cenário:** você vai passar o laboratório da trilha para outras pessoas do time e já viu três tipos de chamado: "systemd não sobe", "tá lento" (lab em `/mnt/c`) e "meus números não batem com os seus" (dados diferentes do `gera-lab.sh`). Em vez de responder um a um, você quer um `~/lab/preflight-wsl.sh` que qualquer pessoa rode antes de começar e que diga, de forma objetiva, se o ambiente está apto.
@@ -255,22 +258,22 @@ printf 'dados/\n' > .gitignore && git add . && git commit -m "Laboratório inici
 
 ## Conexão com os módulos seguintes
 
-| Conceito deste módulo | Aparece novamente em |
-|---|---|
-| `sudo`, `apt`, `uname`, `/etc/os-release` | Módulos 01 e 07 |
-| `~/lab`, `gera-lab.sh` | Todos os módulos práticos; `grep`/`awk` no 04 |
-| systemd habilitado | Módulo 06 e 17 |
-| Snapshots (`--export/--import`) | Labs destrutivos dos Módulos 08, 10 e 16 |
-| Git inicial | Módulos 15 e 19 |
+| Conceito deste módulo                     | Aparece novamente em                          |
+| ----------------------------------------- | --------------------------------------------- |
+| `sudo`, `apt`, `uname`, `/etc/os-release` | Módulos 01 e 07                               |
+| `~/lab`, `gera-lab.sh`                    | Todos os módulos práticos; `grep`/`awk` no 04 |
+| systemd habilitado                        | Módulo 06 e 17                                |
+| Snapshots (`--export/--import`)           | Labs destrutivos dos Módulos 08, 10 e 16      |
+| Git inicial                               | Módulos 15 e 19                               |
 
 ## `[REFERÊNCIA]`
 
-- Microsoft Learn — *Instalar o WSL*: https://learn.microsoft.com/windows/wsl/install
-- Microsoft Learn — *Comandos básicos do WSL*: https://learn.microsoft.com/windows/wsl/basic-commands
-- Microsoft Learn — *Definições de configuração do WSL (`wsl.conf`, `.wslconfig`)*: https://learn.microsoft.com/windows/wsl/wsl-config
-- Microsoft Learn — *systemd no WSL*: https://learn.microsoft.com/windows/wsl/systemd
-- Microsoft Learn — *Boas práticas de ambiente de desenvolvimento*: https://learn.microsoft.com/windows/wsl/setup/environment
-- VS Code — *Desenvolvimento no WSL*: https://code.visualstudio.com/docs/remote/wsl
+- Microsoft Learn — _Instalar o WSL_: https://learn.microsoft.com/windows/wsl/install
+- Microsoft Learn — _Comandos básicos do WSL_: https://learn.microsoft.com/windows/wsl/basic-commands
+- Microsoft Learn — _Definições de configuração do WSL (`wsl.conf`, `.wslconfig`)_: https://learn.microsoft.com/windows/wsl/wsl-config
+- Microsoft Learn — _systemd no WSL_: https://learn.microsoft.com/windows/wsl/systemd
+- Microsoft Learn — _Boas práticas de ambiente de desenvolvimento_: https://learn.microsoft.com/windows/wsl/setup/environment
+- VS Code — _Desenvolvimento no WSL_: https://code.visualstudio.com/docs/remote/wsl
 - Ubuntu — documentação oficial: https://ubuntu.com/server/docs
 
 **Como aprofundar:** leia a seção "Comparing WSL 1 and WSL 2" na documentação da Microsoft e explore o Windows Terminal (perfis e atalhos), que você usará todos os dias.

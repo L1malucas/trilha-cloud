@@ -1,7 +1,7 @@
 ---
-id: "05_usuarios_grupos_e_permissoes"
-title: "Módulo 05 — Usuários, Grupos e Permissões"
-sidebar_label: "05 · Usuários, Grupos e Permissões"
+id: '05_usuarios_grupos_e_permissoes'
+title: 'Módulo 05 — Usuários, Grupos e Permissões'
+sidebar_label: '05 · Usuários, Grupos e Permissões'
 sidebar_position: 5
 ---
 
@@ -38,12 +38,12 @@ last | head -5             # últimos logins
 
 ## Onde mora a identidade: os arquivos de contas
 
-| Arquivo | Conteúdo |
-|---|---|
-| `/etc/passwd` | Um usuário por linha: `nome:x:UID:GID:comentário:home:shell` |
-| `/etc/shadow` | Hashes de senha e validade (legível só por root) |
-| `/etc/group` | Grupos e seus membros |
-| `/etc/sudoers` | Quem pode usar `sudo` e como |
+| Arquivo        | Conteúdo                                                     |
+| -------------- | ------------------------------------------------------------ |
+| `/etc/passwd`  | Um usuário por linha: `nome:x:UID:GID:comentário:home:shell` |
+| `/etc/shadow`  | Hashes de senha e validade (legível só por root)             |
+| `/etc/group`   | Grupos e seus membros                                        |
+| `/etc/sudoers` | Quem pode usar `sudo` e como                                 |
 
 ```bash
 head -3 /etc/passwd
@@ -110,11 +110,11 @@ ls -l ~/lab/gera-lab.sh
 
 O significado muda entre arquivo e diretório — ponto que mais cai em prova:
 
-| | Arquivo | Diretório |
-|---|---|---|
-| **r** (4) | Ler o conteúdo | **Listar** os nomes dentro |
-| **w** (2) | Alterar o conteúdo | **Criar/apagar/renomear** itens dentro |
-| **x** (1) | **Executar** (script/programa) | **Entrar** (`cd`) e acessar itens |
+|           | Arquivo                        | Diretório                              |
+| --------- | ------------------------------ | -------------------------------------- |
+| **r** (4) | Ler o conteúdo                 | **Listar** os nomes dentro             |
+| **w** (2) | Alterar o conteúdo             | **Criar/apagar/renomear** itens dentro |
+| **x** (1) | **Executar** (script/programa) | **Entrar** (`cd`) e acessar itens      |
 
 Cada permissão vale um número (r=4, w=2, x=1), e a soma por público dá o modo **octal**: `rwx`=7, `rw-`=6, `r-x`=5, `r--`=4. Então `chmod 755` = `rwxr-xr-x`, `644` = `rw-r--r--`, `600` = `rw-------`.
 
@@ -149,11 +149,11 @@ touch a && mkdir d && ls -ld a d
 
 ## Bits especiais: SUID, SGID e sticky
 
-| Bit | Em arquivo | Em diretório | Exemplo |
-|---|---|---|---|
-| **SUID** (4) | Executa como o **dono** do arquivo | — | `/usr/bin/passwd` (muda `shadow` como root) |
-| **SGID** (2) | Executa como o **grupo** do arquivo | Novos arquivos herdam o **grupo** do diretório | Pasta de equipe |
-| **Sticky** (1) | — | Só o dono do arquivo pode apagá-lo | `/tmp` |
+| Bit            | Em arquivo                          | Em diretório                                   | Exemplo                                     |
+| -------------- | ----------------------------------- | ---------------------------------------------- | ------------------------------------------- |
+| **SUID** (4)   | Executa como o **dono** do arquivo  | —                                              | `/usr/bin/passwd` (muda `shadow` como root) |
+| **SGID** (2)   | Executa como o **grupo** do arquivo | Novos arquivos herdam o **grupo** do diretório | Pasta de equipe                             |
+| **Sticky** (1) | —                                   | Só o dono do arquivo pode apagá-lo             | `/tmp`                                      |
 
 ```bash
 ls -l /usr/bin/passwd           # note o 's' no lugar do x do dono: -rwsr-xr-x
@@ -167,7 +167,7 @@ find / -perm -4000 -type f 2>/dev/null     # lista binários SUID (auditoria de 
 
 ## ACLs: permissões mais finas
 
-As permissões u/g/o não dão conta de "a Ana pode ler, mas o Bruno não, e ele é de outro grupo". **ACLs** (*Access Control Lists*) permitem regras por usuário/grupo adicionais.
+As permissões u/g/o não dão conta de "a Ana pode ler, mas o Bruno não, e ele é de outro grupo". **ACLs** (_Access Control Lists_) permitem regras por usuário/grupo adicionais.
 
 ```bash
 sudo apt install -y acl
@@ -190,11 +190,13 @@ sudo chattr -i arquivo
 ## Laboratórios
 
 ### Lab 1 — Usuários e grupos
+
 1. Crie os usuários `ana`, `bruno` e `carla` e os grupos `dev`, `qa`, `ops`.
 2. Ponha `ana` em `dev`, `bruno` em `qa`, `carla` em `ops` (use `usermod -aG`).
 3. Prove: `id ana`, `getent group dev`.
 
 ### Lab 2 — Diretório de equipe com SGID
+
 ```bash
 sudo mkdir -p /srv/projeto
 sudo chgrp dev /srv/projeto
@@ -205,6 +207,7 @@ sudo -u bruno ls /srv/projeto # deve negar (bruno não é do grupo)
 ```
 
 ### Lab 3 — ACL e sticky
+
 1. Dê leitura a `bruno` em `/srv/projeto` via `setfacl`.
 2. Crie `/srv/publico` com sticky e confirme que um usuário não apaga arquivo de outro.
 3. Liste todos os binários SUID do seu sistema.
@@ -244,7 +247,7 @@ sudo -u nobody ls /srv/site                      # Permission denied
 sudo rm -rf /srv/site && sudo userdel deploy     # limpeza do lab
 ```
 
-Repare que `deploy` tem shell `nologin` (ninguém loga como ele) e mesmo assim o `sudo -u deploy` executa comandos — o `nologin` só impede *login*, não a troca de identidade por quem tem sudo.
+Repare que `deploy` tem shell `nologin` (ninguém loga como ele) e mesmo assim o `sudo -u deploy` executa comandos — o `nologin` só impede _login_, não a troca de identidade por quem tem sudo.
 
 ### Lab 6 — Auditoria rápida de contas e permissões
 
@@ -270,6 +273,7 @@ Esperado: a primeira consulta não imprime nada, a segunda só `UID 0: root`, a 
 **Limpeza:** `sudo userdel -r ana bruno carla; sudo groupdel dev qa ops; sudo rm -rf /srv/projeto /srv/publico`.
 
 ### Desafio avançado — Porta 80 sem root e sem SUID
+
 **Nível:** avançado — leva de 1 a 3 horas
 
 - **Cenário:** o time quer servir uma página interna na porta 80, mas a política proíbe rodar o servidor como root e proíbe qualquer binário SUID novo no sistema. O Linux divide o poder do root em pedaços; você vai entregar o servidor com **exatamente o pedaço que ele precisa** e nenhum outro, e provar isso.
@@ -311,13 +315,13 @@ Esperado: a primeira consulta não imprime nada, a segunda só `UID 0: root`, a 
 
 ## Ponte com módulos anteriores
 
-| Vem de | Como reaparece aqui |
-|---|---|
-| Módulo 00 — `sudo` e primeiro usuário | É o usuário que você agora entende como UID 1000 em `sudo`/grupo `sudo` |
-| Módulo 01 — `/etc` e "tudo é arquivo" | `passwd`, `shadow`, `group` e `sudoers.d` são só arquivos de texto em `/etc` |
-| Módulo 02 — pipes, `$?`, here-doc, `tee` | Montam consultas como `cut -d: -f1,3,7 /etc/passwd` e gravam `sudoers.d` com `sudo tee` |
-| Módulo 03 — `ls -l`, `stat`, `find`, `chmod -R` | `find -perm` audita SUID; `ls -li` e `stat` mostram dono e modo |
-| Módulo 04 — `awk -F:`, `sort`, `grep` | Filtram `/etc/passwd`, `/etc/group` e `/etc/shadow` em segundos |
+| Vem de                                          | Como reaparece aqui                                                                     |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Módulo 00 — `sudo` e primeiro usuário           | É o usuário que você agora entende como UID 1000 em `sudo`/grupo `sudo`                 |
+| Módulo 01 — `/etc` e "tudo é arquivo"           | `passwd`, `shadow`, `group` e `sudoers.d` são só arquivos de texto em `/etc`            |
+| Módulo 02 — pipes, `$?`, here-doc, `tee`        | Montam consultas como `cut -d: -f1,3,7 /etc/passwd` e gravam `sudoers.d` com `sudo tee` |
+| Módulo 03 — `ls -l`, `stat`, `find`, `chmod -R` | `find -perm` audita SUID; `ls -li` e `stat` mostram dono e modo                         |
+| Módulo 04 — `awk -F:`, `sort`, `grep`           | Filtram `/etc/passwd`, `/etc/group` e `/etc/shadow` em segundos                         |
 
 ### Lab integrador — Relatório de auditoria de contas
 
@@ -344,13 +348,13 @@ Esperado: `-rw-------` no `ls -l` (só você lê, pois o relatório lista contas
 
 ## Conexão com os módulos seguintes
 
-| Conceito deste módulo | Aparece novamente em |
-|---|---|
-| UID/GID de processos | Processos — Módulo 06 |
-| Permissões de arquivos de serviço | Servidores — Módulo 17 |
-| `sudo`, menor privilégio | Hardening — Módulo 10 |
-| ACLs, SGID em diretórios compartilhados | NFS/Samba — Módulo 17 |
-| Usuário não-root em containers | Docker — Módulo 20 |
+| Conceito deste módulo                   | Aparece novamente em   |
+| --------------------------------------- | ---------------------- |
+| UID/GID de processos                    | Processos — Módulo 06  |
+| Permissões de arquivos de serviço       | Servidores — Módulo 17 |
+| `sudo`, menor privilégio                | Hardening — Módulo 10  |
+| ACLs, SGID em diretórios compartilhados | NFS/Samba — Módulo 17  |
+| Usuário não-root em containers          | Docker — Módulo 20     |
 
 ## `[REFERÊNCIA]`
 
@@ -358,7 +362,7 @@ Esperado: `-rw-------` no `ls -l` (só você lê, pois o relatório lista contas
 - `man chmod`, `man 5 sudoers`, `man setfacl`: https://man7.org/linux/man-pages/
 - sudo — documentação oficial: https://www.sudo.ws/docs/
 - Debian Reference — gerência de contas: https://www.debian.org/doc/manuals/debian-reference/ch04.en.html
-- Red Hat — *Managing users and groups*: https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/configuring_basic_system_settings/managing-users-and-groups
+- Red Hat — _Managing users and groups_: https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/configuring_basic_system_settings/managing-users-and-groups
 - LPI — objetivos 107.1 e 104.5: https://www.lpi.org/our-certifications/exam-102-objectives/
 
 **Como aprofundar:** `man 7 capabilities` (dividir o poder do root em pedaços) e o CIS Benchmark do Ubuntu sobre contas e permissões.

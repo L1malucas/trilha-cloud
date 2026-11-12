@@ -1,7 +1,7 @@
 ---
-id: "07_instalacao_e_gerenciamento_de_pacotes"
-title: "Módulo 07 — Instalação e Gerenciamento de Pacotes"
-sidebar_label: "07 · Pacotes"
+id: '07_instalacao_e_gerenciamento_de_pacotes'
+title: 'Módulo 07 — Instalação e Gerenciamento de Pacotes'
+sidebar_label: '07 · Pacotes'
 sidebar_position: 7
 ---
 
@@ -23,11 +23,11 @@ Instalar software baixando um `.exe` de qualquer site é como comprar remédio d
 
 Duas camadas, em cada família:
 
-| | Camada baixa (arquivo único, **não** resolve dependências) | Camada alta (repositórios + dependências) |
-|---|---|---|
-| **Debian/Ubuntu** | `dpkg` (`.deb`) | `apt` |
-| **Red Hat/Rocky/Fedora** | `rpm` (`.rpm`) | `dnf` (sucessor do `yum`) |
-| **SUSE** | `rpm` | `zypper` |
+|                          | Camada baixa (arquivo único, **não** resolve dependências) | Camada alta (repositórios + dependências) |
+| ------------------------ | ---------------------------------------------------------- | ----------------------------------------- |
+| **Debian/Ubuntu**        | `dpkg` (`.deb`)                                            | `apt`                                     |
+| **Red Hat/Rocky/Fedora** | `rpm` (`.rpm`)                                             | `dnf` (sucessor do `yum`)                 |
+| **SUSE**                 | `rpm`                                                      | `zypper`                                  |
 
 > `[TEORIA]` Pense assim: `dpkg`/`rpm` são o **instalador de um arquivo**; `apt`/`dnf` são o **gerente de loja** que busca, resolve a árvore de dependências e chama o instalador de baixo. Na dúvida, use a camada alta.
 
@@ -48,7 +48,7 @@ apt list --installed | wc -l          # quantos pacotes instalados
 apt list --upgradable                 # o que pode atualizar
 ```
 
-> `[ATENÇÃO]` `apt update` **não atualiza programas**: só atualiza o *catálogo*. É `apt upgrade` que instala as versões novas. Confusão clássica. E `remove` mantém arquivos de configuração em `/etc`; para reinstalar "limpo", use `purge`.
+> `[ATENÇÃO]` `apt update` **não atualiza programas**: só atualiza o _catálogo_. É `apt upgrade` que instala as versões novas. Confusão clássica. E `remove` mantém arquivos de configuração em `/etc`; para reinstalar "limpo", use `purge`.
 
 > `[TENTE VOCÊ]` Ensaie uma instalação sem instalar nada. Rode `apt-get -s install tree | grep -E '^(Inst|Conf)'`. Resposta: aparecem linhas como `Inst tree (2.1.1-2ubuntu3 Ubuntu:24.04/noble [amd64])` e `Conf tree ...`. Raciocínio: `-s` (simulate) executa o resolvedor de dependências e mostra o plano — `Inst` é "vou desempacotar", `Conf` é "vou configurar" — sem tocar no disco e sem exigir `sudo`. É o jeito de saber o impacto de um `install` antes de apertar Enter em produção.
 
@@ -71,16 +71,16 @@ sudo apt -f install                   # conserta dependências quebradas depois 
 
 Disponível no WSL via container (`docker run -it rockylinux:9`) ou numa VM Rocky/Alma. Compare os comandos:
 
-| Tarefa | apt (Debian) | dnf (Red Hat) |
-|---|---|---|
-| Atualizar catálogo | `apt update` | (automático; `dnf makecache`) |
-| Atualizar tudo | `apt upgrade` | `dnf upgrade` |
-| Instalar | `apt install X` | `dnf install X` |
-| Remover | `apt remove X` | `dnf remove X` |
-| Buscar | `apt search X` | `dnf search X` |
-| Info | `apt show X` | `dnf info X` |
-| Quem fornece o arquivo? | `dpkg -S /caminho` | `dnf provides /caminho` ou `rpm -qf /caminho` |
-| Listar arquivos do pacote | `dpkg -L X` | `rpm -ql X` |
+| Tarefa                    | apt (Debian)       | dnf (Red Hat)                                 |
+| ------------------------- | ------------------ | --------------------------------------------- |
+| Atualizar catálogo        | `apt update`       | (automático; `dnf makecache`)                 |
+| Atualizar tudo            | `apt upgrade`      | `dnf upgrade`                                 |
+| Instalar                  | `apt install X`    | `dnf install X`                               |
+| Remover                   | `apt remove X`     | `dnf remove X`                                |
+| Buscar                    | `apt search X`     | `dnf search X`                                |
+| Info                      | `apt show X`       | `dnf info X`                                  |
+| Quem fornece o arquivo?   | `dpkg -S /caminho` | `dnf provides /caminho` ou `rpm -qf /caminho` |
+| Listar arquivos do pacote | `dpkg -L X`        | `rpm -ql X`                                   |
 
 ```bash
 dnf provides /usr/sbin/ss             # qual pacote entrega 'ss'
@@ -153,29 +153,37 @@ make install                                 # instala em --prefix
 ## Laboratórios
 
 ### Lab 1 — O ciclo apt
+
 1. `apt update`, `apt policy nginx`, instale `nginx` e `htop`.
 2. Veja os arquivos instalados (`dpkg -L nginx | head -20`) e a qual pacote pertence `/etc/nginx/nginx.conf` (`dpkg -S`).
 3. `apt remove` vs `apt purge`: compare o que sobra em `/etc/nginx`.
 
 ### Lab 2 — Descobrindo pacotes
+
 1. Descubra qual pacote fornece o comando `dig` (`apt-file` ou `dpkg -S $(which dig)`; instale `apt-file` e rode `apt-file search bin/dig`).
 2. Liste os 10 maiores pacotes instalados: `dpkg-query -Wf '${Installed-Size}\t${Package}\n' | sort -rn | head`.
 
 ### Lab 3 — Compilando
+
 Compile o `hello` do GNU como mostrado e rode-o. Depois apague `~/.local/bin/hello` e o código.
 
 ### Lab 4 — Segunda família
+
 Em `docker run -it rockylinux:9`: `dnf install -y tree`, `rpm -qi tree`, `dnf provides /usr/bin/tree`.
 
 ### Lab 5 — Detectando um binário adulterado
+
 Cenário: um auditor pergunta se os pacotes do servidor ainda têm os arquivos originais. O `dpkg` guarda o MD5 de cada arquivo instalado.
+
 1. `sudo apt install -y tree` e `dpkg -V tree` (sem saída = tudo íntegro).
 2. Adultere de leve: `sudo cp /usr/bin/tree /tmp/tree.bak && echo x | sudo tee -a /usr/bin/tree >/dev/null`.
 3. `dpkg -V tree` agora imprime algo como `??5??????  /usr/bin/tree` (o `5` sinaliza MD5 diferente).
 4. Restaure sem apagar nada à mão: `sudo apt install --reinstall -y tree` e confirme que `dpkg -V tree` voltou a ficar mudo.
 
 ### Lab 6 — Construindo seu primeiro .deb
+
 Cenário: sua equipe distribui um script interno e quer instalá-lo, listá-lo e removê-lo como qualquer pacote.
+
 ```bash
 mkdir -p ~/lab/pkg/ola-lab/DEBIAN ~/lab/pkg/ola-lab/usr/local/bin
 cat > ~/lab/pkg/ola-lab/usr/local/bin/ola-lab <<'EOF'
@@ -197,10 +205,13 @@ dpkg -L ola-lab
 dpkg -S /usr/local/bin/ola-lab
 sudo apt remove -y ola-lab
 ```
+
 Esperado: o comando imprime a mensagem, `dpkg -L` mostra o caminho do script e `dpkg -S` responde `ola-lab: /usr/local/bin/ola-lab`. Depois do `remove`, `which ola-lab` não retorna nada.
 
 ### Lab 7 — Instalação idempotente (a base do Ansible)
+
 Cenário: você precisa de um comando que garanta pacotes sem reinstalar o que já existe, e que rode igual 10 vezes seguidas.
+
 ```bash
 cat > ~/lab/garante-pacotes.sh <<'EOF'
 #!/usr/bin/env bash
@@ -218,6 +229,7 @@ chmod +x ~/lab/garante-pacotes.sh
 ~/lab/garante-pacotes.sh curl tree jq
 ~/lab/garante-pacotes.sh curl tree jq
 ```
+
 Na segunda execução todas as linhas devem começar com `ok`. Essa propriedade — rodar de novo sem efeito colateral — chama-se **idempotência** e é o que o Ansible (Módulo 21) e o Dockerfile (Módulo 20) automatizam.
 
 ### Desafios
@@ -263,48 +275,54 @@ Na segunda execução todas as linhas devem começar com `ok`. Essa propriedade 
 
 ## Ponte com módulos anteriores
 
-| Vem de | Como reaparece aqui |
-|---|---|
-| Módulo 03 (`find`, `stat`, caminhos) | `dpkg -L`/`dpkg -S` ligam arquivo e pacote; `/usr/local` e `~/.local` como destinos de `--prefix` |
-| Módulo 04 (`grep`, `awk`, `sort`, `uniq`) | Analisar `/var/log/dpkg.log` e a saída de `dpkg-query` |
-| Módulo 05 (`sudo`, dono e modo) | Só root altera o catálogo; chaves em `/etc/apt/keyrings` devem ser `0644` e do root |
-| Módulo 06 (processos e serviços) | Pacote de servidor instala uma unit; `apt` trava com o lock de outro processo |
+| Vem de                                    | Como reaparece aqui                                                                               |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Módulo 03 (`find`, `stat`, caminhos)      | `dpkg -L`/`dpkg -S` ligam arquivo e pacote; `/usr/local` e `~/.local` como destinos de `--prefix` |
+| Módulo 04 (`grep`, `awk`, `sort`, `uniq`) | Analisar `/var/log/dpkg.log` e a saída de `dpkg-query`                                            |
+| Módulo 05 (`sudo`, dono e modo)           | Só root altera o catálogo; chaves em `/etc/apt/keyrings` devem ser `0644` e do root               |
+| Módulo 06 (processos e serviços)          | Pacote de servidor instala uma unit; `apt` trava com o lock de outro processo                     |
 
 ### Lab integrador — Auditoria de pacotes do servidor
+
 Cenário: antes de uma auditoria você precisa responder: o que foi instalado e quando, quais são os maiores pacotes, e quem é dono das chaves de confiança.
+
 1. (Módulo 04) Instalações por dia, a partir do log do dpkg:
+
 ```bash
 awk '$3=="install"{print $1}' /var/log/dpkg.log | sort | uniq -c
 ```
-Esperado: uma linha por dia com a quantidade de pacotes novos (ex.: `  3 2026-01-10`).
-2. (Módulos 04 e 07) Os 5 maiores pacotes, em MB:
+
+Esperado: uma linha por dia com a quantidade de pacotes novos (ex.: `  3 2026-01-10`). 2. (Módulos 04 e 07) Os 5 maiores pacotes, em MB:
+
 ```bash
 dpkg-query -Wf '${Installed-Size}\t${Package}\n' | sort -rn | head -5 | awk '{printf "%.1f MB  %s\n", $1/1024, $2}'
 ```
+
 3. (Módulo 05) Dono e modo da chave de confiança do Ubuntu, e dos diretórios de chaves:
+
 ```bash
 stat -c '%a %U:%G %n' /usr/share/keyrings/ubuntu-archive-keyring.gpg /etc/apt/keyrings
 ```
-Esperado: `644 root:root` para a chave e `755 root:root` para o diretório. Se uma chave tivesse permissão de escrita para outros, qualquer usuário poderia trocar a "assinatura" em que o apt confia.
-4. (Módulos 03 e 06) Quais pacotes instalados trouxeram uma unit do systemd? `dpkg -S /usr/lib/systemd/system/*.service 2>/dev/null | cut -d: -f1 | sort -u | head`. Compare com `systemctl list-unit-files --type=service | wc -l`.
+
+Esperado: `644 root:root` para a chave e `755 root:root` para o diretório. Se uma chave tivesse permissão de escrita para outros, qualquer usuário poderia trocar a "assinatura" em que o apt confia. 4. (Módulos 03 e 06) Quais pacotes instalados trouxeram uma unit do systemd? `dpkg -S /usr/lib/systemd/system/*.service 2>/dev/null | cut -d: -f1 | sort -u | head`. Compare com `systemctl list-unit-files --type=service | wc -l`.
 
 ## Conexão com os módulos seguintes
 
-| Conceito deste módulo | Aparece novamente em |
-|---|---|
-| Repositórios e chaves GPG | Hardening — Módulo 10 |
-| `apt install` de serviços | Servidores — Módulo 17 |
-| Compilar, `make` | Kernel e módulos — Módulo 13 |
-| Instalação reproduzível | Ansible — Módulo 21; Dockerfile — Módulo 20 |
+| Conceito deste módulo     | Aparece novamente em                        |
+| ------------------------- | ------------------------------------------- |
+| Repositórios e chaves GPG | Hardening — Módulo 10                       |
+| `apt install` de serviços | Servidores — Módulo 17                      |
+| Compilar, `make`          | Kernel e módulos — Módulo 13                |
+| Instalação reproduzível   | Ansible — Módulo 21; Dockerfile — Módulo 20 |
 
 ## `[REFERÊNCIA]`
 
-- Debian — *Debian Reference, gerência de pacotes*: https://www.debian.org/doc/manuals/debian-reference/ch02.en.html
-- Ubuntu — *Package management*: https://ubuntu.com/server/docs/package-management
+- Debian — _Debian Reference, gerência de pacotes_: https://www.debian.org/doc/manuals/debian-reference/ch02.en.html
+- Ubuntu — _Package management_: https://ubuntu.com/server/docs/package-management
 - Fedora/RHEL — documentação do DNF: https://dnf.readthedocs.io/
-- Red Hat — *Managing software with DNF*: https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/managing_software_with_the_dnf_tool/
+- Red Hat — _Managing software with DNF_: https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/managing_software_with_the_dnf_tool/
 - `man apt`, `man dpkg`, `man rpm`: https://man7.org/linux/man-pages/
-- GNU — *Build system* (`configure`/`make`): https://www.gnu.org/prep/standards/html_node/Managing-Releases.html
+- GNU — _Build system_ (`configure`/`make`): https://www.gnu.org/prep/standards/html_node/Managing-Releases.html
 - LPI — objetivos 102.4 a 102.6: https://www.lpi.org/our-certifications/exam-102-objectives/
 
 **Como aprofundar:** leia `man sources.list` e `man deb822` para entender o formato moderno de repositório; faça o mesmo com um `.repo` do dnf.

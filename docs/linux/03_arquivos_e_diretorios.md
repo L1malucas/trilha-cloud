@@ -1,7 +1,7 @@
 ---
-id: "03_arquivos_e_diretorios"
-title: "Módulo 03 — Arquivos e Diretórios"
-sidebar_label: "03 · Arquivos e Diretórios"
+id: '03_arquivos_e_diretorios'
+title: 'Módulo 03 — Arquivos e Diretórios'
+sidebar_label: '03 · Arquivos e Diretórios'
 sidebar_position: 3
 ---
 
@@ -75,12 +75,12 @@ wc -l arq.txt                  # conta linhas (-w palavras, -c bytes)
 
 O shell troca os padrões pela lista de nomes que combinam, **antes** de chamar o programa:
 
-| Padrão | Casa com |
-|---|---|
-| `*` | Qualquer sequência de caracteres |
-| `?` | Exatamente um caractere |
-| `[abc]` / `[a-z]` | Um caractere do conjunto/faixa |
-| `{a,b,c}` | Expansão de chaves (gera `a b c`) |
+| Padrão            | Casa com                          |
+| ----------------- | --------------------------------- |
+| `*`               | Qualquer sequência de caracteres  |
+| `?`               | Exatamente um caractere           |
+| `[abc]` / `[a-z]` | Um caractere do conjunto/faixa    |
+| `{a,b,c}`         | Expansão de chaves (gera `a b c`) |
 
 ```bash
 ls *.log                       # todos terminados em .log
@@ -131,7 +131,7 @@ locate access.log
 ## Links: dois nomes, um arquivo
 
 - **Link físico (hard link)**: **outro nome para o mesmo inode**. Os dois nomes são iguais; apagar um não afeta o outro. Só vale dentro do mesmo sistema de arquivos e não para diretórios.
-- **Link simbólico (symlink)**: um **atalho**, um arquivo pequeno que guarda o *caminho* do alvo. Funciona entre sistemas de arquivos e para diretórios; se o alvo for apagado, o link fica "quebrado".
+- **Link simbólico (symlink)**: um **atalho**, um arquivo pequeno que guarda o _caminho_ do alvo. Funciona entre sistemas de arquivos e para diretórios; se o alvo for apagado, o link fica "quebrado".
 
 ```bash
 echo "conteudo" > original.txt
@@ -145,6 +145,7 @@ readlink -f simbolico.txt             # para onde aponta
 ```
 
 ![Saída de `ls -li` mostrando o mesmo número de inode para original.txt e fisico.txt e o símbolo -> no link simbólico](screenshots/03-arquivos-e-diretorios/01-links-inodes.png)
+
 > `[PRINT]` Passo a passo para capturar: executar o bloco acima até o `ls -li` (antes do `rm`). Capturar as três linhas.
 
 > `[TENTE VOCÊ]` Quanto pesa um symlink? Rode `ln -s /etc/hostname /tmp/h && ls -l /tmp/h && stat -c %s /tmp/h`. Resposta: o `ls` mostra `/tmp/h -> /etc/hostname` e o `stat` imprime `13`, que é exatamente o número de caracteres de `/etc/hostname`. Um symlink não guarda o conteúdo do alvo — só o **texto do caminho**. Por isso ele "quebra" quando o alvo some. Limpe com `rm /tmp/h`.
@@ -180,16 +181,19 @@ zip -r bkp.zip ~/lab/dados && unzip -l bkp.zip
 ## Laboratórios
 
 ### Lab 1 — Estrutura e limpeza
+
 1. Crie `~/lab/proj/{src,docs,tests}` com um comando e `touch` três arquivos em cada pasta.
 2. Copie a árvore com `cp -a` para `proj_bkp` e compare com `diff -r proj proj_bkp`.
 3. Apague com `rm -r` só os `.tmp` (crie alguns antes), conferindo com `find` antes.
 
 ### Lab 2 — find em ação
+
 1. Ache os 10 maiores arquivos de `/usr` (`find /usr -type f -printf '%s %p\n' | sort -rn | head`).
 2. Liste os arquivos de `/etc` modificados nos últimos 30 dias.
 3. Ache todos os `.log` de `~/lab` e conte as linhas de cada um com `-exec wc -l {} \;`.
 
 ### Lab 3 — Links e backup
+
 1. Crie um symlink `~/atalho-dados` para `~/lab/dados`.
 2. Gere `backup-AAAAMMDD.tar.gz` usando `$(date +%Y%m%d)` no nome.
 3. Extraia em `/tmp/teste` e verifique com `diff -r`.
@@ -253,6 +257,7 @@ Raciocínio: arquivos vazios gastam quase zero bytes, mas cada um consome um **i
   **Verifique:** `stat -c '%h' ~/lab/hl/l1 && cat ~/lab/hl/l2` deve imprimir `2` e depois a linha que você escreveu.
 
 ### Desafio avançado — Deduplicador por hard link
+
 **Nível:** avançado — leva de 1 a 3 horas
 
 - **Cenário:** o diretório de artefatos de build guarda dezenas de versões e a maior parte dos arquivos é idêntica entre elas. O disco está apertado, mas ninguém pode perder arquivo nem mudar o caminho de nada. Você vai escrever `~/lab/dedup.sh <dir>... [--apply]`, que recupera espaço trocando duplicatas por hard links.
@@ -301,13 +306,13 @@ Raciocínio: arquivos vazios gastam quase zero bytes, mas cada um consome um **i
 
 ## Ponte com módulos anteriores
 
-| Vem de | Como reaparece aqui |
-|---|---|
-| Módulo 00 — `~/lab/dados` e Git em `~/lab` | São os arquivos que você copia, compacta e mede; o `.gitignore` evita versionar backups |
-| Módulo 00 — `/mnt/c` x `~` | `du` e `df` deixam claro que `/mnt/c` é outro sistema de arquivos |
-| Módulo 01 — FHS e "tudo é arquivo" | `find /etc`, `du /var` e os links `/bin -> usr/bin` ganham sentido |
-| Módulo 02 — redirecionamento, pipes, `$(date)` | Montam o nome do backup e capturam os erros do `tar` |
-| Módulo 02 — variáveis e aspas | Protegem caminhos com `"$DEST"` ao montar o comando |
+| Vem de                                         | Como reaparece aqui                                                                     |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Módulo 00 — `~/lab/dados` e Git em `~/lab`     | São os arquivos que você copia, compacta e mede; o `.gitignore` evita versionar backups |
+| Módulo 00 — `/mnt/c` x `~`                     | `du` e `df` deixam claro que `/mnt/c` é outro sistema de arquivos                       |
+| Módulo 01 — FHS e "tudo é arquivo"             | `find /etc`, `du /var` e os links `/bin -> usr/bin` ganham sentido                      |
+| Módulo 02 — redirecionamento, pipes, `$(date)` | Montam o nome do backup e capturam os erros do `tar`                                    |
+| Módulo 02 — variáveis e aspas                  | Protegem caminhos com `"$DEST"` ao montar o comando                                     |
 
 ### Lab integrador — Backup datado dos dados do lab
 
@@ -327,12 +332,12 @@ Esperado: um arquivo `dados-AAAAMMDD-HHMMSS.tar.gz` de poucos KB, membros começ
 
 ## Conexão com os módulos seguintes
 
-| Conceito deste módulo | Aparece novamente em |
-|---|---|
-| Inode, `df -i` | Armazenamento — Módulo 08 |
-| `find`, `xargs`, `tar` | Scripts de backup — Módulo 11 |
-| Permissões de arquivo (`ls -l`) | Módulo 05 |
-| `tail -f` | Logs — Módulo 12 |
+| Conceito deste módulo           | Aparece novamente em          |
+| ------------------------------- | ----------------------------- |
+| Inode, `df -i`                  | Armazenamento — Módulo 08     |
+| `find`, `xargs`, `tar`          | Scripts de backup — Módulo 11 |
+| Permissões de arquivo (`ls -l`) | Módulo 05                     |
+| `tail -f`                       | Logs — Módulo 12              |
 
 ## `[REFERÊNCIA]`
 
@@ -340,7 +345,7 @@ Esperado: um arquivo `dados-AAAAMMDD-HHMMSS.tar.gz` de poucos KB, membros começ
 - GNU Findutils (`find`, `xargs`): https://www.gnu.org/software/findutils/manual/
 - GNU `tar`: https://www.gnu.org/software/tar/manual/
 - `man7.org` — `inode(7)`, `glob(7)`: https://man7.org/linux/man-pages/man7/inode.7.html
-- *The Linux Command Line*, capítulos de manipulação de arquivos: https://linuxcommand.org/tlcl.php
+- _The Linux Command Line_, capítulos de manipulação de arquivos: https://linuxcommand.org/tlcl.php
 - LPI — objetivos 103.3/103.4: https://www.lpi.org/our-certifications/exam-101-objectives/
 
 **Como aprofundar:** leia `man find` até a seção "EXAMPLES" e `man 7 glob`; depois refaça os desafios sem consultar este módulo.

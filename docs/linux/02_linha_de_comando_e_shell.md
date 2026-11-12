@@ -1,7 +1,7 @@
 ---
-id: "02_linha_de_comando_e_shell"
-title: "Módulo 02 — Linha de Comando e Shell"
-sidebar_label: "02 · Linha de Comando e Shell"
+id: '02_linha_de_comando_e_shell'
+title: 'Módulo 02 — Linha de Comando e Shell'
+sidebar_label: '02 · Linha de Comando e Shell'
 sidebar_position: 2
 ---
 
@@ -23,7 +23,7 @@ Quatro palavras que se confundem:
 
 - **Terminal (emulador)**: a janela onde você digita (Windows Terminal).
 - **TTY**: a "linha serial" virtual por onde texto entra e sai (`/dev/pts/0`).
-- **Shell**: o **programa** que lê o que você digita, interpreta e executa. O padrão é o **bash** (*Bourne Again SHell*); há também `zsh`, `fish`, `sh`.
+- **Shell**: o **programa** que lê o que você digita, interpreta e executa. O padrão é o **bash** (_Bourne Again SHell_); há também `zsh`, `fish`, `sh`.
 - **Console**: o terminal físico/principal da máquina.
 
 O shell é um **intérprete**: você escreve uma linha, ele a divide em palavras, expande variáveis e curingas, procura o programa e o executa. Entender essa ordem evita 80% dos mistérios.
@@ -73,7 +73,7 @@ type ls                # o que é "ls": alias, função, comando embutido ou pro
 which python3          # caminho do executável
 ```
 
-As seções do `man`: 1 comandos, 5 formatos de arquivo, 8 administração. `man 5 passwd` mostra o *arquivo* passwd; `man 1 passwd` o *comando*.
+As seções do `man`: 1 comandos, 5 formatos de arquivo, 8 administração. `man 5 passwd` mostra o _arquivo_ passwd; `man 1 passwd` o _comando_.
 
 > `[TENTE VOCÊ]` Descubra, só com o terminal, qual opção do `ls` ordena por tamanho. Resposta: `man ls` e procure por `-S` (`/sort`, Enter).
 
@@ -152,7 +152,7 @@ EOF
 
 > `[TENTE VOCÊ]` Separe a saída normal do erro: `ls /etc /nao-existe > /tmp/o.txt 2> /tmp/e.txt; wc -l /tmp/o.txt /tmp/e.txt`. Resposta: o `e.txt` tem exatamente **1** linha (a reclamação do `ls`) e o `o.txt` tem a listagem inteira de `/etc`. Cada canal (1 e 2) vai para o seu destino — por isso um script consegue guardar erros em um arquivo e resultados em outro.
 
-> `[ATENÇÃO]` A **ordem** dos redirecionamentos importa. `ls /nao-existe > /tmp/x.txt 2>&1` manda tudo para o arquivo; já `ls /nao-existe 2>&1 > /tmp/x.txt` ainda mostra o erro na tela. Leia da esquerda para a direita: `2>&1` copia "para onde o 1 aponta *agora*". No segundo caso, o 1 ainda apontava para o terminal.
+> `[ATENÇÃO]` A **ordem** dos redirecionamentos importa. `ls /nao-existe > /tmp/x.txt 2>&1` manda tudo para o arquivo; já `ls /nao-existe 2>&1 > /tmp/x.txt` ainda mostra o erro na tela. Leia da esquerda para a direita: `2>&1` copia "para onde o 1 aponta _agora_". No segundo caso, o 1 ainda apontava para o terminal.
 
 ## Pipes: a ideia mais poderosa do Unix
 
@@ -166,23 +166,23 @@ ls -l /etc | sort -k5 -n | tail -3  # 3 maiores arquivos por tamanho (coluna 5)
 echo "Olá" | tee saida.txt          # tee: mostra na tela E grava
 ```
 
-> `[TEORIA]` Filosofia Unix: *escreva programas que façam uma coisa bem, que trabalhem juntos e que processem texto*. Os Módulos 03 e 04 são basicamente a coleção dessas ferramentas.
+> `[TEORIA]` Filosofia Unix: _escreva programas que façam uma coisa bem, que trabalhem juntos e que processem texto_. Os Módulos 03 e 04 são basicamente a coleção dessas ferramentas.
 
 ## Produtividade: histórico, atalhos e aliases
 
 **Atalhos do bash** (decore estes e economize horas):
 
-| Atalho | Faz |
-|---|---|
-| `Tab` | Autocompleta (duas vezes: lista opções) |
-| `↑` / `↓` | Navega pelo histórico |
-| `Ctrl+R` | Busca no histórico digitando |
-| `Ctrl+A` / `Ctrl+E` | Início / fim da linha |
-| `Ctrl+W` | Apaga a palavra anterior |
-| `Ctrl+C` | Interrompe o comando |
-| `Ctrl+D` | Fim de entrada / sair do shell |
-| `Ctrl+L` | Limpa a tela |
-| `!!` | Repete o último comando (`sudo !!` repete com sudo) |
+| Atalho              | Faz                                                 |
+| ------------------- | --------------------------------------------------- |
+| `Tab`               | Autocompleta (duas vezes: lista opções)             |
+| `↑` / `↓`           | Navega pelo histórico                               |
+| `Ctrl+R`            | Busca no histórico digitando                        |
+| `Ctrl+A` / `Ctrl+E` | Início / fim da linha                               |
+| `Ctrl+W`            | Apaga a palavra anterior                            |
+| `Ctrl+C`            | Interrompe o comando                                |
+| `Ctrl+D`            | Fim de entrada / sair do shell                      |
+| `Ctrl+L`            | Limpa a tela                                        |
+| `!!`                | Repete o último comando (`sudo !!` repete com sudo) |
 
 ```bash
 history | tail -10              # histórico
@@ -201,6 +201,7 @@ source ~/.bashrc
 ```
 
 ![Terminal usando Ctrl+R para buscar no histórico um comando digitado anteriormente](screenshots/02-linha-de-comando-e-shell/01-ctrl-r-historico.png)
+
 > `[PRINT]` Passo a passo para capturar: rodar alguns comandos, pressionar `Ctrl+R`, digitar parte de um deles e capturar a tela com o prompt "(reverse-i-search)".
 
 ## Encadeando comandos
@@ -219,16 +220,19 @@ echo $?                             # código de saída do último comando (0 = 
 ## Laboratórios
 
 ### Lab 1 — Navegação e ajuda
+
 1. Vá para `/var/log` com caminho absoluto, volte com `cd -`, depois suba de `~/lab/dados` para `~` usando `..`.
 2. Use `man` para descobrir o que fazem `ls -t` e `ls -r`.
 3. Descubra se `ls` é alias, função ou programa com `type`.
 
 ### Lab 2 — Redirecionamento e pipes
+
 1. Grave a lista de `/etc` em `etc.txt` e conte as linhas com `wc -l`.
 2. Execute `ls /etc /nao-existe` separando saída e erro em arquivos diferentes.
 3. Mostre quantos comandos distintos você já usou: `history | awk '{print $2}' | sort -u | wc -l`.
 
 ### Lab 3 — Personalizando o ambiente
+
 1. Crie 3 aliases úteis (`ll`, `..`, `gs='git status'`) no `~/.bashrc`.
 2. Defina um prompt próprio: `export PS1='\u@\h:\w\$ '` e teste.
 3. Abra um novo terminal e confirme que tudo persistiu.
@@ -291,6 +295,7 @@ O `command -v` não imprime nada se o programa não existe e devolve código dif
   **Verifique:** `grep -c access.log ~/lab/ok.txt; wc -l < ~/lab/erro.txt` deve mostrar `1` e depois `1`, e o código impresso na tela deve ser `2`.
 
 ### Desafio avançado — trace-run: executar e registrar sem perder nada
+
 **Nível:** avançado — leva de 1 a 3 horas
 
 - **Cenário:** o time de plantão cola comandos em produção e, depois do incidente, ninguém consegue reconstruir o que foi executado, o que saiu na tela e o que foi erro. Você vai escrever `~/bin/trace-run` (no seu `PATH`, como no Lab 5) para ser um prefixo: `trace-run <comando> [args...]`. Ele executa o comando normalmente e deixa um registro auditável.
@@ -302,7 +307,7 @@ O `command -v` não imprime nada se o programa não existe e devolve código dif
   5. Nenhuma linha se perde: quando o comando termina, `out` e `err` já estão completos, mesmo com saída lenta.
   6. Se o comando morrer por sinal (ex.: `SIGTERM`), o `meta` registra o exit code `128+sinal`.
 - **Restrições:** só bash (sem `script`, `ts`, `moreutils` ou Python); sem arquivos temporários fora do diretório da execução; o script deve ter `set -u` e não pode usar `eval`.
-- **Onde pesquisar:** `man bash` (seções *Process Substitution*, *Redirection* com `exec` e descritores extras, `wait`), `printf %q`, `$SECONDS` ou `EPOCHREALTIME`.
+- **Onde pesquisar:** `man bash` (seções _Process Substitution_, _Redirection_ com `exec` e descritores extras, `wait`), `printf %q`, `$SECONDS` ou `EPOCHREALTIME`.
 - **Verifique:**
   ```bash
   trace-run bash -c 'echo out; echo err >&2; exit 7'; echo "rc=$?"     # out e err na tela, rc=7
@@ -330,13 +335,13 @@ O `command -v` não imprime nada se o programa não existe e devolve código dif
 
 ## Ponte com módulos anteriores
 
-| Vem de | Como reaparece aqui |
-|---|---|
-| Módulo 00 — Windows Terminal + Ubuntu | É o **terminal** que abriga o **shell** (bash) descritos no começo deste módulo |
-| Módulo 00 — `~/lab` e `gera-lab.sh` | Os dados de `~/lab/dados` alimentam todos os pipes e redirecionamentos |
-| Módulo 00 — `wslpath`, `explorer.exe` | Mostram que o shell roda programas de outro mundo (Windows) como qualquer comando |
-| Módulo 01 — `/etc/os-release`, `uname`, `hostnamectl` | São os comandos que você agora encadeia, redireciona e transforma em script |
-| Módulo 01 — FHS (`/etc`, `/var`, `/usr`) | Viram os caminhos absolutos e relativos que você navega |
+| Vem de                                                | Como reaparece aqui                                                               |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Módulo 00 — Windows Terminal + Ubuntu                 | É o **terminal** que abriga o **shell** (bash) descritos no começo deste módulo   |
+| Módulo 00 — `~/lab` e `gera-lab.sh`                   | Os dados de `~/lab/dados` alimentam todos os pipes e redirecionamentos            |
+| Módulo 00 — `wslpath`, `explorer.exe`                 | Mostram que o shell roda programas de outro mundo (Windows) como qualquer comando |
+| Módulo 01 — `/etc/os-release`, `uname`, `hostnamectl` | São os comandos que você agora encadeia, redireciona e transforma em script       |
+| Módulo 01 — FHS (`/etc`, `/var`, `/usr`)              | Viram os caminhos absolutos e relativos que você navega                           |
 
 ### Lab integrador — Um painel do ambiente em um comando
 
@@ -363,18 +368,18 @@ Esperado: cinco linhas no painel, `5000 linhas em access.log` e `5 /home/.../inf
 
 ## Conexão com os módulos seguintes
 
-| Conceito deste módulo | Aparece novamente em |
-|---|---|
+| Conceito deste módulo    | Aparece novamente em             |
+| ------------------------ | -------------------------------- | --- | ------------------- |
 | Pipes e redirecionamento | Módulo 04 (`grep`, `sed`, `awk`) |
-| Código de saída, `&&`/`||` | Módulo 11 (scripts) |
-| Variáveis e PATH | Módulos 07 e 11 |
-| `.bashrc`, aliases | Todo o resto da trilha |
+| Código de saída, `&&`/`  |                                  | `   | Módulo 11 (scripts) |
+| Variáveis e PATH         | Módulos 07 e 11                  |
+| `.bashrc`, aliases       | Todo o resto da trilha           |
 
 ## `[REFERÊNCIA]`
 
 - GNU Bash Reference Manual: https://www.gnu.org/software/bash/manual/
 - Advanced Bash-Scripting Guide: https://tldp.org/LDP/abs/html/
-- *The Linux Command Line* (gratuito), partes 1 e 2: https://linuxcommand.org/tlcl.php
+- _The Linux Command Line_ (gratuito), partes 1 e 2: https://linuxcommand.org/tlcl.php
 - `man7.org` — páginas de manual online: https://man7.org/linux/man-pages/
 - explainshell (explica comandos peça por peça): https://explainshell.com/
 - LPI — objetivos 103: https://www.lpi.org/our-certifications/exam-101-objectives/
